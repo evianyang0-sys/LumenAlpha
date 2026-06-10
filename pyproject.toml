@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lumenalpha"
+version = "1.0.0"
+description = "Explainable, industry-aware A-share technical research toolkit"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "Evian Yang", email = "evianyang0@gmail.com" }
+]
+dependencies = [
+  "pandas>=2.0",
+  "numpy>=1.24",
+  "baostock>=0.8.9",
+]
+
+[project.optional-dependencies]
+data = [
+  "akshare>=1.12",
+  "tushare>=1.4",
+]
+charts = [
+  "plotly>=5.18",
+  "tabulate>=0.9",
+]
+
+[project.scripts]
+lumenalpha = "stock_analyzer_project.stock_analyzer_main:main"
+lumenalpha-guide-report = "stock_analyzer_project.guide_report:main"
+
+[tool.setuptools.packages.find]
+include = ["stock_analyzer_project*"]
