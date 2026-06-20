@@ -1,0 +1,7 @@
+[submodule "LumenAlpha"]
+	path = LumenAlpha
+	url = https://github.com/evianyang0-sys/LumenAlpha.git
+
+[submodule "microsoft-qlib"]
+	path = microsoft-qlib
+	url = https://github.com/microsoft/qlib.git

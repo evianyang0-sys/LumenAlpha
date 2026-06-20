@@ -1,0 +1,25 @@
+{
+  "input": "data/a_share_hot_rank/a_share_hot_rank_top2000_boards_latest.csv",
+  "taxonomy": "config/tech_board_taxonomy.json",
+  "rows": 2000,
+  "tech_rows": 887,
+  "non_tech_rows": 1113,
+  "tech_l2_counts": {
+    "电子制造与通信设备": 174,
+    "半导体与先进封装": 167,
+    "软件AI与信创": 150,
+    "AI算力与数据中心": 132,
+    "光通信与高速互联": 85,
+    "AI终端与消费电子": 78,
+    "机器人与智能汽车": 51,
+    "PCB与电子制造": 50
+  },
+  "source_fetch_status": {
+    "ok": 45
+  },
+  "files": {
+    "detail": "data/a_share_hot_rank/a_share_hot_rank_top2000_tech_reclassified_20260618_175348.csv",
+    "summary": "data/a_share_hot_rank/a_share_hot_rank_top2000_by_designed_board_20260618_175348.csv",
+    "source_fetch": "data/a_share_hot_rank/a_share_hot_rank_tech_source_fetch_20260618_175348.csv"
+  }
+}

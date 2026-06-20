@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>板块轮动信号台</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="主导航">
+        <div class="brand">
+          <span class="brand-mark">↗</span>
+          <span>SectorFlow</span>
+        </div>
+        <nav class="side-nav">
+          <button class="nav-item active" type="button" data-view="dashboard" data-section="leadersSection"><span class="nav-icon">⌁</span><span>龙头天梯</span></button>
+          <button class="nav-item" type="button" data-view="dashboard" data-section="trendsSection"><span class="nav-icon">▥</span><span>板块曲线</span></button>
+          <button class="nav-item" type="button" data-view="dashboard" data-section="signalsSection"><span class="nav-icon">◎</span><span>统一信号</span></button>
+          <button class="nav-item" type="button" data-view="analysis"><span class="nav-icon">▤</span><span>日报分析</span></button>
+          <button class="nav-item" type="button" data-view="factor"><span class="nav-icon">≋</span><span>因子图谱</span></button>
+          <button class="nav-item" type="button" data-view="review"><span class="nav-icon">□</span><span>数据复盘</span></button>
+          <button class="nav-item" type="button" data-view="merge"><span class="nav-icon">◫</span><span>项目合并</span></button>
+        </nav>
+        <div class="side-footer">
+          <span class="collapse-icon">≡</span>
+          <span>收起</span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div>
+            <h1>板块轮动信号台</h1>
+            <p id="generatedAt">生成中</p>
+          </div>
+          <div class="mode-switch" role="tablist" aria-label="视图模式">
+            <button class="mode active" type="button" data-mode="day">单日</button>
+            <button class="mode" type="button" data-mode="multi">多日</button>
+            <button class="mode" type="button" data-mode="list">列表</button>
+          </div>
+          <div class="top-actions">
+            <span class="live-pill">LIVE</span>
+            <div class="avatar">Y</div>
+          </div>
+        </header>
+
+        <section class="notice">
+          <span class="notice-icon">⌁</span>
+          <span>qlib 因子、LumenAlpha 技术信号、东方财富人气与本地科技板块 taxonomy 已统一到同一张信号表。</span>
+        </section>
+
+        <div id="dashboardView" class="view active">
+          <section class="board-strip">
+            <div class="section-title">
+              <span class="accent"></span>
+              <h2>轮动板块</h2>
+            </div>
+            <div id="boardChips" class="chip-row"></div>
+          </section>
+
+          <section id="metrics" class="metrics-grid" aria-label="数据概览"></section>
+
+          <section id="leadersSection" class="content-grid">
+            <div class="panel leaders-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>个股龙头</h2>
+                  <p id="leaderSubhead">显著信号优先</p>
+                </div>
+                <div class="source-legend">
+                  <span class="source qlib">qlib</span>
+                  <span class="source lumen">LumenAlpha</span>
+                  <span class="source eastmoney">人气</span>
+                </div>
+              </div>
+              <div id="leaderLadder" class="ladder"></div>
+            </div>
+
+            <aside class="panel detail-panel">
+              <div class="panel-head compact">
+                <h2>龙头拆解</h2>
+                <span id="detailScore" class="score-pill">--</span>
+              </div>
+              <div id="leaderDetail" class="leader-detail"></div>
+            </aside>
+          </section>
+
+          <section id="trendsSection" class="panel trends-panel">
+            <div class="panel-head">
+              <div>
+                <h2>板块时间趋势</h2>
+                <p>近 60 个交易日等权曲线</p>
+              </div>
+              <div class="panel-actions">
+                <div id="boardWindowControls" class="mini-segment" aria-label="板块时间范围">
+                  <button class="active" type="button" data-window="10">10日</button>
+                  <button type="button" data-window="30">30日</button>
+                  <button type="button" data-window="60">60日</button>
+                </div>
+                <div id="coverageBadge" class="coverage-badge">--</div>
+              </div>
+            </div>
+            <div class="trend-layout">
+              <div id="sectorTrends" class="trend-grid"></div>
+              <aside id="boardDetail" class="board-detail"></aside>
+            </div>
+          </section>
+
+          <section id="signalsSection" class="panel signals-panel">
+            <div class="panel-head">
+              <div>
+                <h2>统一信号流</h2>
+                <p>去重展示，优先保留每只股票最显著的一条信号</p>
+              </div>
+            </div>
+            <div class="signal-toolbar">
+              <label class="signal-search">
+                <span>搜索</span>
+                <input id="signalSearch" type="search" placeholder="股票 / 板块 / 信号 / 来源">
+              </label>
+              <span id="signalResultCount" class="coverage-badge">--</span>
+            </div>
+            <div id="signalTable" class="signal-table"></div>
+          </section>
+        </div>
+
+        <div id="analysisView" class="view">
+          <section class="panel analysis-panel">
+            <div class="panel-head">
+              <div>
+                <h2>日报分析</h2>
+                <p>自动生成的板块轮动结论、共振龙头与风险分歧</p>
+              </div>
+              <div id="analysisStatus" class="coverage-badge">读取中</div>
+            </div>
+            <div id="dailyAnalysis" class="markdown-report"></div>
+          </section>
+        </div>
+
+        <div id="factorView" class="view">
+          <section class="panel factor-hero">
+            <div class="panel-head">
+              <div>
+                <h2>因子图谱</h2>
+                <p id="factorGeneratedAt">qlib + LumenAlpha</p>
+              </div>
+              <div id="factorTotal" class="coverage-badge">--</div>
+            </div>
+            <div id="factorMetrics" class="factor-metrics"></div>
+          </section>
+
+          <section class="panel factor-panel">
+            <div class="factor-toolbar">
+              <div id="factorProjectTabs" class="factor-tabs"></div>
+              <label class="factor-search">
+                <span>搜索</span>
+                <input id="factorSearch" type="search" placeholder="名称 / 含义 / 公式">
+              </label>
+            </div>
+            <div id="factorFamilyTabs" class="factor-tabs family-tabs"></div>
+            <div id="factorNotes" class="factor-notes"></div>
+            <div id="factorCatalog" class="factor-catalog"></div>
+          </section>
+        </div>
+
+        <div id="reviewView" class="view">
+          <section class="panel review-panel">
+            <div class="panel-head">
+              <div>
+                <h2>数据复盘</h2>
+                <p>本轮数据健康、覆盖缺口与输出质量</p>
+              </div>
+              <div id="reviewHealth" class="coverage-badge">--</div>
+            </div>
+            <div id="reviewMetrics" class="review-grid"></div>
+            <div id="reviewFindings" class="review-list"></div>
+          </section>
+
+          <section class="panel review-panel">
+            <div class="panel-head">
+              <div>
+                <h2>板块强弱复盘</h2>
+                <p>按趋势分和人气排序观察轮动方向</p>
+              </div>
+            </div>
+            <div id="reviewBoards" class="review-board-list"></div>
+          </section>
+        </div>
+
+        <div id="mergeView" class="view">
+          <section class="panel merge-panel">
+            <div class="panel-head">
+              <div>
+                <h2>项目合并蓝图</h2>
+                <p>保留 qlib 与 LumenAlpha 边界，用集成层统一信号、板块与展示</p>
+              </div>
+            </div>
+            <div id="mergeFlow" class="merge-flow"></div>
+          </section>
+
+          <section class="panel merge-panel">
+            <div class="panel-head">
+              <div>
+                <h2>统一信号模型</h2>
+                <p>所有来源进入同一张 long-form signal table</p>
+              </div>
+            </div>
+            <div id="mergeSchema" class="schema-grid"></div>
+          </section>
+        </div>
+      </main>
+    </div>
+
+    <script src="dashboard_data.js"></script>
+    <script src="factor_catalog.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

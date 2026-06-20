@@ -1,0 +1,29 @@
+{
+  "requested_top": 2000,
+  "collected_top_rows": 2000,
+  "all_code_rows": 5528,
+  "ranked_rows": 5207,
+  "unranked_rows": 321,
+  "calc_times": [
+    "2026-06-18 17:08:00",
+    "2026-06-18 17:10:00",
+    "2026-06-18 17:12:00"
+  ],
+  "market_all_count_values": [
+    5528
+  ],
+  "collected_at": "2026-06-18T17:15:59",
+  "sources": {
+    "hot_rank": "Eastmoney emappdata stockrank/getCurrentLatest per stock",
+    "industry_boards": "Sina stock sector spot/detail, indicator=行业",
+    "concept_boards": "Sina stock sector spot/detail, indicator=概念",
+    "code_name": "AkShare stock_info_a_code_name"
+  },
+  "files": {
+    "all_ranks": "data/a_share_hot_rank/a_share_hot_rank_all_ranks_20260618_171559.csv",
+    "detail": "data/a_share_hot_rank/a_share_hot_rank_top2000_boards_20260618_171559.csv",
+    "industry_summary": "data/a_share_hot_rank/a_share_hot_rank_top2000_by_industry_20260618_171559.csv",
+    "concept_summary": "data/a_share_hot_rank/a_share_hot_rank_top2000_by_concept_20260618_171559.csv",
+    "board_fetch_summary": "data/a_share_hot_rank/a_share_board_fetch_summary_20260618_171559.csv"
+  }
+}

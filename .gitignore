@@ -1,0 +1,36 @@
+.DS_Store
+
+# Python/runtime noise
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pycache-test/
+.test-home/
+.venv*/
+
+# Node/runtime noise
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Secrets must stay local
+.env
+.env.*
+!.env.example
+
+# Daily refresh cache and transient run logs
+data/sector_rotation/cache/
+data/sector_rotation/daily_runs/
+data/sector_rotation/ai_analysis/
+*.log
+
+# Keep latest data snapshots in git; ignore timestamped historical runs.
+data/a_share_hot_rank/*_20[0-9][0-9][0-9][0-9][0-9][0-9]_*.csv
+data/a_share_hot_rank/*_20[0-9][0-9][0-9][0-9][0-9][0-9]_*.json
+data/a_share_hot_rank/*_20[0-9][0-9][0-9][0-9][0-9][0-9].json
+data/sector_rotation/*_20[0-9][0-9][0-9][0-9][0-9][0-9]_*.csv
+data/sector_rotation/*_20[0-9][0-9][0-9][0-9][0-9][0-9]_*.json
+data/sector_rotation/reports/*_20[0-9][0-9][0-9][0-9][0-9][0-9]_*.md
