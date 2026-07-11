@@ -82,6 +82,15 @@ ANCHOR_NAMES = [
     "寒武纪",
 ]
 
+PROXY_ENV_KEYS = [
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "ALL_PROXY",
+    "http_proxy",
+    "https_proxy",
+    "all_proxy",
+]
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build sector rotation unified signals and dashboard data.")
@@ -98,7 +107,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-stocks", type=int, default=180, help="Max unique stocks to fetch.")
     parser.add_argument("--workers", type=int, default=6, help="History fetch workers.")
     parser.add_argument("--refresh-history", action="store_true", help="Ignore cached history files.")
+    parser.add_argument("--keep-proxy", action="store_true", help="Keep proxy environment variables for market data requests.")
     return parser.parse_args()
+
+
+def clear_proxy_env() -> None:
+    for key in PROXY_ENV_KEYS:
+        os.environ.pop(key, None)
 
 
 def normalize_code(value: Any) -> str:
@@ -233,20 +248,65 @@ def trim_history_window(df: pd.DataFrame, start_date: str) -> pd.DataFrame:
     return df[df["日期"] >= start_ts].sort_values("日期").reset_index(drop=True)
 
 
+def sina_symbol(code: str) -> str:
+    if code.startswith(("6", "9")):
+        return f"sh{code}"
+    if code.startswith(("4", "8")):
+        return f"bj{code}"
+    return f"sz{code}"
+
+
 def fetch_history_from_akshare(code: str, start_date: str, end_date: str) -> pd.DataFrame:
-    df = ak.stock_zh_a_hist(
-        symbol=code,
-        period="daily",
-        start_date=start_date,
-        end_date=end_date,
-        adjust="qfq",
-    )
+    last_error = ""
+    try:
+        df = ak.stock_zh_a_hist(
+            symbol=code,
+            period="daily",
+            start_date=start_date,
+            end_date=end_date,
+            adjust="qfq",
+        )
+        if df is not None and not df.empty:
+            keep = ["日期", "开盘", "收盘", "最高", "最低", "成交量", "成交额", "涨跌幅", "换手率"]
+            existing = [col for col in keep if col in df.columns]
+            parsed = parse_history_cache(df[existing].copy(), code)
+            parsed.attrs["history_source"] = "eastmoney"
+            return parsed
+    except Exception as exc:  # noqa: BLE001
+        last_error = f"eastmoney {type(exc).__name__}: {exc}"
+
+    try:
+        df = ak.stock_zh_a_daily(
+            symbol=sina_symbol(code),
+            start_date=start_date,
+            end_date=end_date,
+            adjust="qfq",
+        )
+    except Exception as exc:  # noqa: BLE001
+        sina_error = f"sina {type(exc).__name__}: {exc}"
+        raise RuntimeError("; ".join(item for item in [last_error, sina_error] if item)) from exc
+
     if df is None or df.empty:
         return pd.DataFrame()
-    keep = ["日期", "开盘", "收盘", "最高", "最低", "成交量", "成交额", "涨跌幅", "换手率"]
+    df = df.rename(
+        columns={
+            "date": "日期",
+            "open": "开盘",
+            "close": "收盘",
+            "high": "最高",
+            "low": "最低",
+            "volume": "成交量",
+            "amount": "成交额",
+            "turnover": "换手率",
+        }
+    )
+    keep = ["日期", "开盘", "收盘", "最高", "最低", "成交量", "成交额", "换手率"]
     existing = [col for col in keep if col in df.columns]
-    df = df[existing].copy()
-    return parse_history_cache(df, code)
+    parsed = parse_history_cache(df[existing].copy(), code)
+    if not parsed.empty:
+        parsed["涨跌幅"] = parsed["收盘"].pct_change() * 100
+        parsed.attrs["history_source"] = "sina"
+    return parsed
 
 
 def fetch_history_one(code: str, start_date: str, end_date: str, cache_dir: Path, refresh: bool) -> tuple[str, pd.DataFrame, str]:
@@ -273,6 +333,7 @@ def fetch_history_one(code: str, start_date: str, end_date: str, cache_dir: Path
                 if not cached.empty:
                     return code, trim_history_window(cached, requested_start_date), f"{cache_status}_no_new_rows"
                 return code, pd.DataFrame(), "empty"
+            history_source = str(df.attrs.get("history_source") or "akshare")
             if not cached.empty:
                 df = (
                     pd.concat([cached, df], ignore_index=True)
@@ -282,7 +343,7 @@ def fetch_history_one(code: str, start_date: str, end_date: str, cache_dir: Path
                 )
             df.to_csv(stable_cache_path, index=False, encoding="utf-8-sig")
             time.sleep(0.05)
-            return code, trim_history_window(df, requested_start_date), "akshare_incremental" if cache_status else "akshare"
+            return code, trim_history_window(df, requested_start_date), f"{history_source}_incremental" if cache_status else history_source
         except Exception as exc:  # noqa: BLE001
             last_error = f"{type(exc).__name__}: {exc}"
             time.sleep(0.4 * (attempt + 1))
@@ -814,6 +875,8 @@ def write_latest_copy(path: Path) -> None:
 
 def main() -> int:
     args = parse_args()
+    if not args.keep_proxy:
+        clear_proxy_env()
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "reports").mkdir(parents=True, exist_ok=True)
@@ -847,7 +910,7 @@ def main() -> int:
         "板块时间曲线使用每个板块人气前若干股票等权近似，不等同于正式指数。",
     ]
     if history_missing:
-        known_issues.append(f"本轮有 {history_missing} 只股票历史行情未成功拉取，主要表现为 Eastmoney 历史接口 ProxyError；对应个股的 qlib/LumenAlpha 分数会降级。")
+        known_issues.append(f"本轮有 {history_missing} 只股票历史行情未成功拉取，主要表现为历史行情接口错误或无返回；对应个股的 qlib/LumenAlpha 分数会降级。")
 
     review = {
         "rows_detail": int(len(detail)),

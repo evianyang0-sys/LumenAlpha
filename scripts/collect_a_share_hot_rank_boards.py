@@ -36,6 +36,10 @@ DEFAULT_GLOBAL_ID = "786e4c21-70dc-435a-93bb-38"
 THREAD_LOCAL = threading.local()
 
 
+class HotRankUnavailable(RuntimeError):
+    """Raised when the rank endpoint is unavailable before a full collection."""
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Collect A-share Eastmoney popularity ranks and board mapping."
@@ -151,6 +155,24 @@ def fetch_code_name(max_stocks: int | None = None) -> pd.DataFrame:
     return df[["code", "market_symbol", "name"]]
 
 
+def load_cached_code_name(path: Path, max_stocks: int | None = None) -> pd.DataFrame:
+    print(f"Loading cached A-share code/name list: {path}")
+    df = pd.read_csv(path, dtype={"code": str, "market_symbol": str})
+    df["code"] = df["code"].map(normalize_code)
+    df = df[df["code"] != ""].drop_duplicates("code")
+    if "market_symbol" not in df.columns:
+        df["market_symbol"] = df["code"].map(market_symbol)
+    else:
+        missing_symbol = df["market_symbol"].astype(str).str.strip().isin({"", "nan", "None"})
+        df.loc[missing_symbol, "market_symbol"] = df.loc[missing_symbol, "code"].map(market_symbol)
+    if "name" not in df.columns:
+        df["name"] = ""
+    if max_stocks:
+        df = df.head(max_stocks).copy()
+    print(f"Loaded {len(df)} cached stock codes.")
+    return df[["code", "market_symbol", "name"]]
+
+
 def fetch_latest_rank(row: dict[str, Any], retries: int = 3) -> dict[str, Any]:
     symbol = row["market_symbol"]
     payload = {
@@ -165,7 +187,16 @@ def fetch_latest_rank(row: dict[str, Any], retries: int = 3) -> dict[str, Any]:
             session = get_thread_session()
             response = session.post(HOT_RANK_URL, json=payload, timeout=12)
             if response.status_code == 403:
-                time.sleep(1.5 * attempt)
+                return {
+                    **row,
+                    "rank": None,
+                    "rank_change": None,
+                    "his_rank_change": None,
+                    "his_rank_change_rank": None,
+                    "calc_time": None,
+                    "market_all_count": None,
+                    "rank_status": "forbidden: HTTP 403",
+                }
             response.raise_for_status()
             data = response.json().get("data") or {}
             if not data:
@@ -208,10 +239,19 @@ def collect_ranks(stocks: pd.DataFrame, workers: int) -> pd.DataFrame:
     print(f"Fetching Eastmoney latest hot ranks with {workers} workers...")
     started = time.time()
     rows = stocks.to_dict("records")
-    results: list[dict[str, Any]] = []
-    done = 0
+    probe_count = min(3, len(rows))
+    results = [fetch_latest_rank(row, retries=1) for row in rows[:probe_count]]
+    failed_probes = [
+        result for result in results
+        if str(result.get("rank_status", "")).startswith(("error:", "forbidden:"))
+    ]
+    if probe_count and len(failed_probes) == probe_count:
+        statuses = "; ".join(str(result["rank_status"]) for result in failed_probes)
+        raise HotRankUnavailable(f"Eastmoney rank preflight failed: {statuses}")
+
+    done = probe_count
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(fetch_latest_rank, row) for row in rows]
+        futures = [executor.submit(fetch_latest_rank, row) for row in rows[probe_count:]]
         for future in as_completed(futures):
             results.append(future.result())
             done += 1
@@ -465,6 +505,7 @@ def main() -> int:
     collected_at = datetime.now().isoformat(timespec="seconds")
 
     if args.rank_file:
+        rank_source = "provided_file"
         print(f"Loading rank file: {args.rank_file}")
         ranks = pd.read_csv(args.rank_file, dtype={"code": str, "market_symbol": str})
         ranks["code"] = ranks["code"].map(normalize_code)
@@ -474,8 +515,27 @@ def main() -> int:
         stocks = ranks[["code", "market_symbol", "name"]].drop_duplicates("code")
         print(f"Loaded {len(ranks)} rank rows from file.")
     else:
-        stocks = fetch_code_name(args.max_stocks)
-        ranks = collect_ranks(stocks, max(1, args.workers))
+        rank_source = "live"
+        try:
+            stocks = fetch_code_name(args.max_stocks)
+        except Exception as exc:  # noqa: BLE001
+            fallback = output_dir / "a_share_hot_rank_all_ranks_latest.csv"
+            if not fallback.exists():
+                raise
+            print(f"Warning: live code/name list failed: {type(exc).__name__}: {exc}")
+            stocks = load_cached_code_name(fallback, args.max_stocks)
+        try:
+            ranks = collect_ranks(stocks, max(1, args.workers))
+        except HotRankUnavailable as exc:
+            fallback = output_dir / "a_share_hot_rank_all_ranks_latest.csv"
+            if not fallback.exists():
+                raise
+            print(f"Warning: {exc}; reusing cached ranks from {fallback}")
+            ranks = pd.read_csv(fallback, dtype={"code": str, "market_symbol": str})
+            ranks["code"] = ranks["code"].map(normalize_code)
+            if args.max_stocks:
+                ranks = ranks.head(args.max_stocks).copy()
+            rank_source = "cached_after_preflight_failure"
     all_ranks_path = output_dir / f"a_share_hot_rank_all_ranks_{stamp}.csv"
     ranks.to_csv(all_ranks_path, index=False, encoding="utf-8-sig")
 
@@ -528,6 +588,7 @@ def main() -> int:
 
     notes = {
         "requested_top": args.top,
+        "rank_source": rank_source,
         "collected_top_rows": int(len(enriched)),
         "all_code_rows": int(len(stocks)),
         "ranked_rows": int(ranked.shape[0]),
@@ -538,7 +599,11 @@ def main() -> int:
         ),
         "collected_at": collected_at,
         "sources": {
-            "hot_rank": "Eastmoney emappdata stockrank/getCurrentLatest per stock",
+            "hot_rank": (
+                "cached a_share_hot_rank_all_ranks_latest.csv after Eastmoney preflight failure"
+                if rank_source == "cached_after_preflight_failure"
+                else "Eastmoney emappdata stockrank/getCurrentLatest per stock"
+            ),
             "industry_boards": "Sina stock sector spot/detail, indicator=行业",
             "concept_boards": "Sina stock sector spot/detail, indicator=概念",
             "code_name": "AkShare stock_info_a_code_name",

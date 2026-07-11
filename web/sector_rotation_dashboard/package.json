@@ -4,6 +4,10 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "dev": "node server.mjs"
+    "dev": "node server.mjs",
+    "test": "node --test auth_store.test.mjs"
+  },
+  "dependencies": {
+    "better-sqlite3": "12.11.1"
   }
 }

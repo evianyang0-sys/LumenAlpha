@@ -1,0 +1,7 @@
+akshare==1.18.64
+beautifulsoup4>=4.13,<5
+demjson3>=3.0,<4
+numpy>=2.0,<3
+pandas>=2.3,<3
+py-mini-racer>=0.6,<1
+requests>=2.32,<3

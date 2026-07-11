@@ -42,7 +42,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--python", default=sys.executable, help="Python executable used to run project scripts.")
     parser.add_argument("--top", type=int, default=2000, help="Hot-rank rows to keep.")
     parser.add_argument("--rank-workers", type=int, default=2, help="Workers for Eastmoney hot-rank collection.")
-    parser.add_argument("--pipeline-workers", type=int, default=3, help="Workers for stock history fetches.")
+    parser.add_argument("--pipeline-workers", type=int, default=1, help="Workers for stock history fetches.")
     parser.add_argument("--history-days", type=int, default=180, help="Calendar days of stock history to keep.")
     parser.add_argument("--top-boards", type=int, default=20, help="Boards rendered in the dashboard.")
     parser.add_argument("--leaders-per-board", type=int, default=8, help="Leaders selected per board.")
@@ -170,7 +170,7 @@ def build_reclassify_cmd(args: argparse.Namespace) -> list[str]:
 
 
 def build_pipeline_cmd(args: argparse.Namespace) -> list[str]:
-    return [
+    cmd = [
         args.python,
         "lumen_qlib/sector_rotation_pipeline.py",
         "--history-days",
@@ -184,6 +184,9 @@ def build_pipeline_cmd(args: argparse.Namespace) -> list[str]:
         "--workers",
         str(args.pipeline_workers),
     ]
+    if args.keep_proxy:
+        cmd.append("--keep-proxy")
+    return cmd
 
 
 def classify_signal_confluence(row: dict[str, str]) -> str:

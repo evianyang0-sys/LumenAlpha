@@ -29,7 +29,22 @@ http://127.0.0.1:8766/
 DEEPSEEK_API_KEY=your_key npm start -- --port 8766
 ```
 
-无 key 时页面仍可完整浏览，只是“AI 分析”按钮会提示需要配置环境变量。
+也可以使用本地配置文件。复制 `.env.example` 为 `.env.local`，填入：
+
+```text
+DEEPSEEK_API_KEY=your_key
+DEEPSEEK_MODEL=deepseek-v4-pro
+```
+
+然后重启 `npm start -- --port 8766`。`.env.local` 会被 `.gitignore` 忽略，不会提交到仓库。无 key 时页面仍可完整浏览，只是“AI 分析”按钮会提示需要配置。
+
+如果本机代理导致 Node 请求 DeepSeek 报 `SELF_SIGNED_CERT_IN_CHAIN`，可以只在本地 `.env.local` 里临时加：
+
+```text
+NODE_TLS_REJECT_UNAUTHORIZED=0
+```
+
+这会关闭 Node 的 TLS 证书校验，只建议在本机开发环境使用。
 
 ## Daily Refresh
 
@@ -44,6 +59,19 @@ DEEPSEEK_API_KEY=your_key npm start -- --port 8766
 ```bash
 .venv-tests/bin/python scripts/daily_refresh_sector_rotation.py --mode weekly
 ```
+
+## Production Deploy
+
+面向公网部署时，使用 `deploy/` 下的脚本和 systemd/Nginx 配置：
+
+```bash
+SYNC_DATA=1 bash deploy/sync_to_server.sh root@8.153.88.170
+ssh root@8.153.88.170 'cd /opt/lumenalpha && bash deploy/bootstrap_ubuntu.sh'
+```
+
+后续只更新代码时不要传 `SYNC_DATA=1`，发布脚本会保留服务器上更新的行情快照、AI 缓存和 SQLite 用户数据库。
+
+完整步骤见 [`deploy/DEPLOYMENT.md`](deploy/DEPLOYMENT.md)。生产环境需要在服务器 `/opt/lumenalpha/.env.local` 中配置 `DEEPSEEK_API_KEY`，不要上传本机 `.env.local`。
 
 ## Visual Pages
 
