@@ -1,0 +1,12 @@
+[Unit]
+Description=LumenAlpha daily stock analysis refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=lumenalpha
+Group=lumenalpha
+WorkingDirectory=/opt/lumenalpha
+EnvironmentFile=-/opt/lumenalpha/.env.local
+ExecStart=/opt/lumenalpha/.venv/bin/python scripts/daily_refresh_sector_rotation.py --mode daily

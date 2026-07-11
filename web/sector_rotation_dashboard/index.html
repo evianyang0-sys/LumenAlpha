@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>板块轮动信号台</title>
+    <title>LumenAlpha 股票板块轮动</title>
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
@@ -11,50 +11,69 @@
       <aside class="sidebar" aria-label="主导航">
         <div class="brand">
           <span class="brand-mark">↗</span>
-          <span>SectorFlow</span>
+          <span class="brand-name">LumenAlpha</span>
         </div>
         <nav class="side-nav">
-          <button class="nav-item active" type="button" data-view="dashboard" data-section="leadersSection"><span class="nav-icon">⌁</span><span>龙头天梯</span></button>
-          <button class="nav-item" type="button" data-view="dashboard" data-section="trendsSection"><span class="nav-icon">▥</span><span>板块曲线</span></button>
-          <button class="nav-item" type="button" data-view="dashboard" data-section="signalsSection"><span class="nav-icon">◎</span><span>统一信号</span></button>
-          <button class="nav-item" type="button" data-view="analysis"><span class="nav-icon">▤</span><span>日报分析</span></button>
-          <button class="nav-item" type="button" data-view="factor"><span class="nav-icon">≋</span><span>因子图谱</span></button>
-          <button class="nav-item" type="button" data-view="review"><span class="nav-icon">□</span><span>数据复盘</span></button>
-          <button class="nav-item" type="button" data-view="merge"><span class="nav-icon">◫</span><span>项目合并</span></button>
+          <button class="nav-item active" type="button" data-view="dashboard" data-section="overviewSection"><span class="nav-icon">⌂</span><span>今日概览</span></button>
+          <button class="nav-item" type="button" data-view="dashboard" data-section="trendsSection"><span class="nav-icon">▥</span><span>板块行情</span></button>
+          <button class="nav-item" type="button" data-view="dashboard" data-section="leadersSection"><span class="nav-icon">⌁</span><span>龙头观察</span></button>
+          <button class="nav-item" type="button" data-view="analysis"><span class="nav-icon">✦</span><span>AI 日报</span></button>
+          <button class="nav-item" type="button" data-view="dashboard" data-section="signalsSection"><span class="nav-icon">◎</span><span>信号中心</span></button>
+          <button class="nav-item" type="button" data-view="factor"><span class="nav-icon">≋</span><span>因子解释</span></button>
+          <button class="nav-item" type="button" data-view="watchlist"><span class="nav-icon">☆</span><span>自选关注</span><span id="watchCount" class="nav-count">0</span></button>
+          <button class="nav-item" type="button" data-view="review"><span class="nav-icon">◫</span><span>数据状态</span></button>
         </nav>
-        <div class="side-footer">
+        <button id="sidebarToggle" class="side-footer" type="button" title="收起侧边栏">
           <span class="collapse-icon">≡</span>
-          <span>收起</span>
-        </div>
+          <span class="collapse-label">收起</span>
+        </button>
       </aside>
 
       <main class="main">
         <header class="topbar">
-          <div>
-            <h1>板块轮动信号台</h1>
-            <p id="generatedAt">生成中</p>
+          <div class="page-identity">
+            <h1>股票板块轮动</h1>
+            <p id="generatedAt">数据读取中</p>
           </div>
-          <div class="mode-switch" role="tablist" aria-label="视图模式">
-            <button class="mode active" type="button" data-mode="day">单日</button>
-            <button class="mode" type="button" data-mode="multi">多日</button>
-            <button class="mode" type="button" data-mode="list">列表</button>
+          <div class="global-search-wrap">
+            <label class="global-search">
+              <span aria-hidden="true">⌕</span>
+              <input id="globalSearch" type="search" autocomplete="off" placeholder="搜索股票、代码或板块">
+            </label>
+            <div id="globalSearchResults" class="global-search-results" hidden></div>
+          </div>
+          <div class="mode-switch" role="tablist" aria-label="快捷视图">
+            <button class="mode active" type="button" data-mode="overview">概览</button>
+            <button class="mode" type="button" data-mode="multi">板块</button>
+            <button class="mode" type="button" data-mode="list">信号</button>
           </div>
           <div class="top-actions">
-            <span class="live-pill">LIVE</span>
-            <div class="avatar">Y</div>
+            <span id="healthPill" class="health-pill"><i></i>数据检查中</span>
+            <div class="auth-control">
+              <button id="authButton" class="auth-button" type="button" aria-haspopup="dialog" aria-controls="accountMenu authDialog" aria-expanded="false"><span class="auth-avatar">人</span><span id="authButtonLabel">登录</span></button>
+              <div id="accountMenu" class="account-menu" role="menu" hidden>
+                <div><strong id="accountUsername">--</strong><span>普通用户</span></div>
+                <button id="logoutButton" type="button" role="menuitem">退出登录</button>
+              </div>
+            </div>
           </div>
         </header>
 
-        <section class="notice">
-          <span class="notice-icon">⌁</span>
-          <span>qlib 因子、LumenAlpha 技术信号、东方财富人气与本地科技板块 taxonomy 已统一到同一张信号表。</span>
-        </section>
-
         <div id="dashboardView" class="view active">
+          <section id="overviewSection" class="overview-section">
+            <div class="section-heading">
+              <div>
+                <h2>今日结论</h2>
+                <p>先看市场状态，再看机会与风险</p>
+              </div>
+              <span id="briefTime" class="section-meta">--</span>
+            </div>
+            <div id="marketBrief" class="market-brief"></div>
+          </section>
+
           <section class="board-strip">
-            <div class="section-title">
-              <span class="accent"></span>
-              <h2>轮动板块</h2>
+            <div class="section-heading compact">
+              <div><h2>板块筛选</h2><p>按强弱排序，点击聚焦</p></div>
             </div>
             <div id="boardChips" class="chip-row"></div>
           </section>
@@ -65,21 +84,17 @@
             <div class="panel leaders-panel">
               <div class="panel-head">
                 <div>
-                  <h2>个股龙头</h2>
-                  <p id="leaderSubhead">显著信号优先</p>
+                  <h2>龙头观察</h2>
+                  <p id="leaderSubhead">综合强度排序</p>
                 </div>
-                <div class="source-legend">
-                  <span class="source qlib">qlib</span>
-                  <span class="source lumen">LumenAlpha</span>
-                  <span class="source eastmoney">人气</span>
-                </div>
+                <div class="table-legend"><span>红色为上涨</span><span>绿色为下跌</span></div>
               </div>
-              <div id="leaderLadder" class="ladder"></div>
+              <div id="leaderLadder" class="leader-table"></div>
             </div>
 
             <aside class="panel detail-panel">
               <div class="panel-head compact">
-                <h2>龙头拆解</h2>
+                <h2>个股拆解</h2>
                 <span id="detailScore" class="score-pill">--</span>
               </div>
               <div id="leaderDetail" class="leader-detail"></div>
@@ -89,14 +104,14 @@
           <section id="trendsSection" class="panel trends-panel">
             <div class="panel-head">
               <div>
-                <h2>板块时间趋势</h2>
-                <p>近 60 个交易日等权曲线</p>
+                <h2>板块行情</h2>
+                <p>板块 K 线、强弱排名与成分股联动</p>
               </div>
               <div class="panel-actions">
                 <div id="boardWindowControls" class="mini-segment" aria-label="板块时间范围">
-                  <button class="active" type="button" data-window="10">10日</button>
-                  <button type="button" data-window="30">30日</button>
-                  <button type="button" data-window="60">60日</button>
+                  <button type="button" data-window="10">10日</button>
+                  <button type="button" data-window="20">20日</button>
+                  <button class="active" type="button" data-window="30">30日</button>
                 </div>
                 <div id="coverageBadge" class="coverage-badge">--</div>
               </div>
@@ -110,8 +125,8 @@
           <section id="signalsSection" class="panel signals-panel">
             <div class="panel-head">
               <div>
-                <h2>统一信号流</h2>
-                <p>去重展示，优先保留每只股票最显著的一条信号</p>
+                <h2>信号中心</h2>
+                <p>每只股票保留最值得关注的一条信号</p>
               </div>
             </div>
             <div class="signal-toolbar">
@@ -129,12 +144,12 @@
           <section class="panel analysis-panel">
             <div class="panel-head">
               <div>
-                <h2>日报分析</h2>
-                <p>自动生成的板块轮动结论、共振龙头与风险分歧</p>
+                <h2>AI 日报</h2>
+                <p>结论、机会、风险和观察位</p>
               </div>
               <div id="analysisStatus" class="coverage-badge">读取中</div>
             </div>
-            <div id="dailyAnalysis" class="markdown-report"></div>
+            <div id="dailyAnalysis" class="daily-analysis"></div>
           </section>
         </div>
 
@@ -142,12 +157,12 @@
           <section class="panel factor-hero">
             <div class="panel-head">
               <div>
-                <h2>因子图谱</h2>
-                <p id="factorGeneratedAt">qlib + LumenAlpha</p>
+                <h2>因子解释</h2>
+                <p id="factorGeneratedAt">把量化语言翻译成普通投资者能读懂的判断</p>
               </div>
               <div id="factorTotal" class="coverage-badge">--</div>
             </div>
-            <div id="factorMetrics" class="factor-metrics"></div>
+            <div id="factorInsights" class="factor-insights"></div>
           </section>
 
           <section class="panel factor-panel">
@@ -155,7 +170,7 @@
               <div id="factorProjectTabs" class="factor-tabs"></div>
               <label class="factor-search">
                 <span>搜索</span>
-                <input id="factorSearch" type="search" placeholder="名称 / 含义 / 公式">
+                <input id="factorSearch" type="search" placeholder="因子名称或它代表什么">
               </label>
             </div>
             <div id="factorFamilyTabs" class="factor-tabs family-tabs"></div>
@@ -164,12 +179,22 @@
           </section>
         </div>
 
+        <div id="watchlistView" class="view">
+          <section class="panel watchlist-panel">
+            <div class="panel-head">
+              <div><h2>自选关注</h2><p id="watchlistHint">登录后跨设备同步；访客数据仅保存在当前浏览器</p></div>
+              <div id="watchlistStatus" class="coverage-badge">0 只</div>
+            </div>
+            <div id="watchlistContent" class="watchlist-content"></div>
+          </section>
+        </div>
+
         <div id="reviewView" class="view">
           <section class="panel review-panel">
             <div class="panel-head">
               <div>
-                <h2>数据复盘</h2>
-                <p>本轮数据健康、覆盖缺口与输出质量</p>
+                <h2>数据状态</h2>
+                <p>更新是否正常、覆盖是否完整、哪些数据需要谨慎</p>
               </div>
               <div id="reviewHealth" class="coverage-badge">--</div>
             </div>
@@ -179,38 +204,46 @@
 
           <section class="panel review-panel">
             <div class="panel-head">
-              <div>
-                <h2>板块强弱复盘</h2>
-                <p>按趋势分和人气排序观察轮动方向</p>
-              </div>
+              <div><h2>板块强弱排名</h2><p>排除未分类板块</p></div>
             </div>
             <div id="reviewBoards" class="review-board-list"></div>
           </section>
         </div>
-
-        <div id="mergeView" class="view">
-          <section class="panel merge-panel">
-            <div class="panel-head">
-              <div>
-                <h2>项目合并蓝图</h2>
-                <p>保留 qlib 与 LumenAlpha 边界，用集成层统一信号、板块与展示</p>
-              </div>
-            </div>
-            <div id="mergeFlow" class="merge-flow"></div>
-          </section>
-
-          <section class="panel merge-panel">
-            <div class="panel-head">
-              <div>
-                <h2>统一信号模型</h2>
-                <p>所有来源进入同一张 long-form signal table</p>
-              </div>
-            </div>
-            <div id="mergeSchema" class="schema-grid"></div>
-          </section>
-        </div>
       </main>
     </div>
+
+    <div id="mobileMoreMenu" class="mobile-more-menu" hidden>
+      <button class="mobile-menu-item" type="button" data-view="dashboard" data-section="signalsSection">信号中心</button>
+      <button class="mobile-menu-item" type="button" data-view="factor">因子解释</button>
+      <button class="mobile-menu-item" type="button" data-view="review">数据状态</button>
+    </div>
+    <nav class="mobile-nav" aria-label="移动端导航">
+      <button class="mobile-nav-item active" type="button" data-view="dashboard" data-section="overviewSection"><span>⌂</span><em>概览</em></button>
+      <button class="mobile-nav-item" type="button" data-view="dashboard" data-section="trendsSection"><span>▥</span><em>板块</em></button>
+      <button class="mobile-nav-item" type="button" data-view="watchlist"><span>☆</span><em>自选</em></button>
+      <button class="mobile-nav-item" type="button" data-view="analysis"><span>✦</span><em>AI</em></button>
+      <button id="mobileMore" class="mobile-nav-item" type="button"><span>☷</span><em>更多</em></button>
+    </nav>
+
+    <dialog id="authDialog" class="auth-dialog" aria-labelledby="authTitle">
+      <div class="auth-dialog-head">
+        <div><span class="auth-dialog-mark">↗</span><div><h2 id="authTitle">登录 LumenAlpha</h2><p>同步自选与个人偏好</p></div></div>
+        <button id="authClose" class="auth-close" type="button" aria-label="关闭">×</button>
+      </div>
+      <div id="authSecurityNotice" class="auth-security-notice" hidden>登录将在 HTTPS 配置完成后开放。</div>
+      <div class="auth-tabs" role="tablist" aria-label="账号操作">
+        <button class="auth-tab active" type="button" role="tab" aria-selected="true" data-auth-mode="login">登录</button>
+        <button class="auth-tab" type="button" role="tab" aria-selected="false" data-auth-mode="register">注册</button>
+      </div>
+      <form id="authForm" class="auth-form" aria-busy="false">
+        <label><span>用户名</span><input id="authUsername" name="username" autocomplete="username" minlength="3" maxlength="24" required></label>
+        <label><span>密码</span><div class="password-field"><input id="authPassword" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required><button id="passwordToggle" type="button" aria-label="显示密码">显示</button></div></label>
+        <label id="confirmPasswordField" hidden><span>确认密码</span><input id="authPasswordConfirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="128"></label>
+        <div id="authError" class="auth-error" role="alert" hidden></div>
+        <button id="authSubmit" class="auth-submit" type="submit">登录</button>
+      </form>
+      <p class="auth-terms">注册即表示同意妥善保管账号密码。</p>
+    </dialog>
 
     <script src="dashboard_data.js"></script>
     <script src="factor_catalog.js"></script>

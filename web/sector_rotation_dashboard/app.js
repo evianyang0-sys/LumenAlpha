@@ -4,20 +4,28 @@
   const state = {
     board: "all",
     leaderCode: null,
-    mode: "day",
+    mode: "overview",
     view: "dashboard",
-    section: "leadersSection",
-    activeDashboardNav: "龙头天梯",
+    section: "overviewSection",
+    activeDashboardNav: "今日概览",
     signalSearch: "",
-    boardWindow: 10,
+    boardWindow: 30,
     selectedBoard: null,
     factorProject: "all",
     factorFamily: "all",
     factorSearch: "",
+    factorLimit: 24,
+    globalSearch: "",
     dailyReportText: "",
     dailyReportStatus: "读取中",
     dailyReportLoading: false,
     aiAnalyses: {},
+    watchlist: readGuestWatchlist(),
+    authUser: null,
+    authReady: false,
+    authAvailable: false,
+    authMode: "login",
+    authSubmitting: false,
   };
 
   const tones = [
@@ -57,6 +65,82 @@
     return `${(n * 100).toFixed(digits)}%`;
   }
 
+  function signedPct(value, digits = 1) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return "--";
+    return `${n >= 0 ? "+" : ""}${(n * 100).toFixed(digits)}%`;
+  }
+
+  function shortText(value, limit = 180) {
+    const text = String(value || "").trim();
+    return text.length > limit ? `${text.slice(0, limit).trim()}...` : text;
+  }
+
+  function readGuestWatchlist() {
+    try {
+      const stored = localStorage.getItem("lumenalpha-watchlist-guest") || localStorage.getItem("lumenalpha-watchlist") || "[]";
+      const value = JSON.parse(stored);
+      return Array.isArray(value) ? value.map(normalizeCode).filter(Boolean) : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveGuestWatchlist() {
+    localStorage.setItem("lumenalpha-watchlist-guest", JSON.stringify(state.watchlist));
+  }
+
+  function clearGuestWatchlist() {
+    localStorage.removeItem("lumenalpha-watchlist-guest");
+    localStorage.removeItem("lumenalpha-watchlist");
+  }
+
+  function isWatched(code) {
+    return state.watchlist.includes(normalizeCode(code));
+  }
+
+  async function toggleWatch(code) {
+    const normalized = normalizeCode(code);
+    if (!normalized) return;
+    const previous = [...state.watchlist];
+    const removing = isWatched(normalized);
+    state.watchlist = removing
+      ? state.watchlist.filter((item) => item !== normalized)
+      : [...state.watchlist, normalized];
+    renderWatchCount();
+    if (!state.authUser) {
+      saveGuestWatchlist();
+      return;
+    }
+    try {
+      const payload = await apiRequest(removing ? `/api/watchlist/${normalized}` : "/api/watchlist", {
+        method: removing ? "DELETE" : "POST",
+        body: removing ? undefined : { code: normalized },
+      });
+      state.watchlist = (payload.codes || []).map(normalizeCode).filter(Boolean);
+      renderWatchCount();
+    } catch (error) {
+      state.watchlist = previous;
+      renderWatchCount();
+      if ($("watchlistHint")) $("watchlistHint").textContent = `同步失败：${error.message}`;
+      if (state.view === "dashboard") renderDashboard();
+      if (state.view === "watchlist") renderWatchlist();
+    }
+  }
+
+  async function apiRequest(path, options = {}) {
+    const headers = {};
+    const request = { method: options.method || "GET", headers, credentials: "same-origin" };
+    if (options.body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      request.body = JSON.stringify(options.body);
+    }
+    const response = await fetch(path, request);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload.ok === false) throw new Error(payload.error || `HTTP ${response.status}`);
+    return payload;
+  }
+
   function normalizeCode(value) {
     const digits = String(value ?? "").replace(/\D/g, "");
     return digits ? digits.slice(-6).padStart(6, "0") : "";
@@ -79,6 +163,11 @@
     const parts = String(path || "").split(">").filter(Boolean);
     if (parts[0] === "科技") return parts[1] || "科技";
     return "一级行业";
+  }
+
+  function isClassifiedBoard(board) {
+    const path = String(board?.board_path || "").trim();
+    return Boolean(path && boardLabel(path) !== "未分类");
   }
 
   function toneFor(path) {
@@ -116,6 +205,25 @@
 
   function aiKey(type, id) {
     return `${type}:${id || "latest"}`;
+  }
+
+  const modeSections = {
+    overview: { section: "overviewSection", nav: "今日概览" },
+    multi: { section: "trendsSection", nav: "板块行情" },
+    list: { section: "signalsSection", nav: "信号中心" },
+  };
+
+  const sectionModes = {
+    overviewSection: "overview",
+    leadersSection: "overview",
+    trendsSection: "multi",
+    signalsSection: "list",
+  };
+
+  function syncModeButtons() {
+    document.querySelectorAll(".mode").forEach((button) => {
+      button.classList.toggle("active", state.view === "dashboard" && button.dataset.mode === state.mode);
+    });
   }
 
   function compactLeader(leader) {
@@ -214,6 +322,10 @@
       `;
     }
     const analysis = item.analysis || {};
+    const fullSummary = String(analysis.summary || "--");
+    const opportunity = (analysis.bullish_points || [])[0] || "暂无明确机会信号";
+    const risk = (analysis.risk_points || [])[0] || "暂无新增风险提示";
+    const plan = (analysis.next_day_plan || [])[0] || "继续观察量价与板块强弱";
     return `
       <div class="ai-card">
         <div class="ai-card-head">
@@ -223,13 +335,22 @@
           </div>
           <button class="ai-button subtle" type="button" data-ai-key="${escapeHtml(key)}" data-refresh="1">刷新</button>
         </div>
-        <p class="ai-summary">${escapeHtml(analysis.summary || "--")}</p>
-        <div class="ai-grid">
-          <div><span>看多依据</span>${aiList(analysis.bullish_points)}</div>
-          <div><span>风险点</span>${aiList(analysis.risk_points)}</div>
-          <div><span>信号分歧</span>${aiList(analysis.signal_conflicts)}</div>
-          <div><span>观察计划</span>${aiList(analysis.next_day_plan)}</div>
+        <p class="ai-summary">${escapeHtml(shortText(fullSummary))}</p>
+        <div class="ai-action-list">
+          <div class="ai-action opportunity"><span>机会</span><p>${escapeHtml(opportunity)}</p></div>
+          <div class="ai-action risk"><span>风险</span><p>${escapeHtml(risk)}</p></div>
+          <div class="ai-action observe"><span>观察</span><p>${escapeHtml(plan)}</p></div>
         </div>
+        <details class="ai-details">
+          <summary>查看完整依据与信号分歧</summary>
+          ${fullSummary.length > 180 ? `<p class="ai-full-summary">${escapeHtml(fullSummary)}</p>` : ""}
+          <div class="ai-grid">
+            <div><span>看多依据</span>${aiList(analysis.bullish_points)}</div>
+            <div><span>风险点</span>${aiList(analysis.risk_points)}</div>
+            <div><span>信号分歧</span>${aiList(analysis.signal_conflicts)}</div>
+            <div><span>观察计划</span>${aiList(analysis.next_day_plan)}</div>
+          </div>
+        </details>
         <div class="ai-foot">置信度 ${escapeHtml(analysis.confidence || "--")}</div>
       </div>
     `;
@@ -322,11 +443,16 @@
 
   function dailyAiContext() {
     const boards = [...(data.boards || [])]
+      .filter(isClassifiedBoard)
       .sort((a, b) => Number(b.sector_trend_score || -1) - Number(a.sector_trend_score || -1))
       .slice(0, 12)
       .map(compactBoard);
     const leaders = [...(data.leaders || [])]
-      .sort((a, b) => Number(b.combined_score || -1) - Number(a.combined_score || -1))
+      .sort((a, b) => {
+        const classDiff = Number(isClassifiedBoard(b)) - Number(isClassifiedBoard(a));
+        if (classDiff) return classDiff;
+        return Number(b.combined_score || -1) - Number(a.combined_score || -1);
+      })
       .slice(0, 24)
       .map(compactLeader);
     return {
@@ -341,7 +467,12 @@
 
   function filteredLeaders() {
     const leaders = data.leaders || [];
-    return state.board === "all" ? leaders : leaders.filter((item) => item.board_path === state.board);
+    if (state.board !== "all") return leaders.filter((item) => item.board_path === state.board);
+    return [...leaders].sort((a, b) => {
+      const classDiff = Number(isClassifiedBoard(b)) - Number(isClassifiedBoard(a));
+      if (classDiff) return classDiff;
+      return Number(b.combined_score || -1) - Number(a.combined_score || -1);
+    });
   }
 
   function filteredSignals() {
@@ -406,7 +537,57 @@
 
   function renderGeneratedAt() {
     const review = data.review || {};
-    $("generatedAt").textContent = `${data.generatedAt || "--"}  |  历史覆盖 ${review.history_ok || 0}/${review.history_total || 0}`;
+    const time = String(data.generatedAt || "--").replace("T", " ");
+    $("generatedAt").textContent = `更新 ${time} · 历史覆盖 ${review.history_ok || 0}/${review.history_total || 0}`;
+    $("briefTime").textContent = time;
+    const health = Number(review.history_total) ? Math.round(Number(review.history_ok || 0) / Number(review.history_total) * 100) : 0;
+    const healthPill = $("healthPill");
+    healthPill.className = `health-pill ${health >= 90 ? "healthy" : health >= 75 ? "warning" : "danger"}`;
+    healthPill.innerHTML = `<i></i>${health ? `数据覆盖 ${health}%` : "数据待检查"}`;
+  }
+
+  function renderMarketBrief() {
+    const boards = [...(data.boards || [])]
+      .filter(isClassifiedBoard)
+      .filter((board) => Number.isFinite(Number(board.sector_trend_score)))
+      .sort((a, b) => Number(b.sector_trend_score) - Number(a.sector_trend_score));
+    const strongest = boards.slice(0, 3);
+    const weakening = [...boards]
+      .filter((board) => Number(board.sector_ret_5d) < 0 || Number(board.sector_trend_score) < 40)
+      .sort((a, b) => Number(a.sector_trend_score) - Number(b.sector_trend_score))
+      .slice(0, 2);
+    const average = strongest.length
+      ? strongest.reduce((sum, board) => sum + Number(board.sector_trend_score || 0), 0) / strongest.length
+      : 0;
+    const regime = average >= 75 ? "主线清晰，强势板块延续" : average >= 55 ? "轮动偏快，优先跟踪强势方向" : "市场分散，控制追高节奏";
+    const riskLabel = weakening.length >= 2 ? "中等" : "偏低";
+    $("marketBrief").innerHTML = `
+      <div class="brief-regime">
+        <span>市场状态</span>
+        <strong>${escapeHtml(regime)}</strong>
+        <p>结合板块趋势、人气排名与量价信号形成，不代表投资建议。</p>
+      </div>
+      <div class="brief-column">
+        <span>强势 Top 3</span>
+        ${strongest.map((board, index) => `<button type="button" data-brief-board="${escapeHtml(board.board_path)}"><em>${index + 1}</em><strong>${escapeHtml(boardLabel(board.board_path))}</strong><b>${num(board.sector_trend_score, 0)}</b></button>`).join("")}
+      </div>
+      <div class="brief-column weak">
+        <span>降温关注</span>
+        ${weakening.length ? weakening.map((board) => `<button type="button" data-brief-board="${escapeHtml(board.board_path)}"><strong>${escapeHtml(boardLabel(board.board_path))}</strong><b>${signedPct(board.sector_ret_5d)}</b></button>`).join("") : `<p>暂无明显退潮板块</p>`}
+      </div>
+      <div class="brief-risk"><span>风险等级</span><strong>${riskLabel}</strong><div class="risk-meter"><i style="--risk:${riskLabel === "中等" ? 54 : 28}%"></i></div></div>
+    `;
+    $("marketBrief").querySelectorAll("[data-brief-board]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.board = button.dataset.briefBoard;
+        state.selectedBoard = state.board;
+        state.section = "trendsSection";
+        state.mode = "multi";
+        state.activeDashboardNav = "板块行情";
+        renderDashboard();
+        renderViews();
+      });
+    });
   }
 
   function renderMetrics() {
@@ -415,24 +596,27 @@
       acc[row.source_project] = (acc[row.source_project] || 0) + 1;
       return acc;
     }, {});
-    const topBoard = [...(data.boards || [])]
+    const classifiedBoards = [...(data.boards || [])].filter(isClassifiedBoard);
+    const curveMap = curvesByBoard();
+    const curveBoards = classifiedBoards.filter((board) => curveMap.has(board.board_path)).length;
+    const topBoard = classifiedBoards
       .filter((board) => Number.isFinite(Number(board.sector_trend_score)))
       .sort((a, b) => Number(b.sector_trend_score) - Number(a.sector_trend_score))[0];
     const items = [
-      ["科技样本", review.tech_rows || "--"],
-      ["入选股票", review.selected_stocks || "--"],
-      ["统一信号", review.unified_signal_rows || "--"],
-      ["曲线板块", `${review.curve_boards || 0}/${review.selected_boards || 0}`],
-      ["qlib 信号", sourceCount.qlib || 0],
-      ["最强板块", boardLabel(topBoard && topBoard.board_path)],
+      ["最强板块", boardLabel(topBoard && topBoard.board_path), "查看板块行情"],
+      ["入选股票", review.selected_stocks || "--", "今日有效样本"],
+      ["统一信号", review.unified_signal_rows || "--", `${sourceCount.qlib || 0} 条 qlib 信号`],
+      ["K线覆盖", `${curveBoards}/${classifiedBoards.length || 0}`, "明确分类板块"],
     ];
     $("metrics").innerHTML = items
-      .map(([label, value]) => `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
+      .map(([label, value, note]) => `<div class="metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong><small>${escapeHtml(note)}</small></div>`)
       .join("");
   }
 
   function renderBoardChips() {
     const boards = [...(data.boards || [])].sort((a, b) => {
+      const classDiff = Number(isClassifiedBoard(b)) - Number(isClassifiedBoard(a));
+      if (classDiff) return classDiff;
       const trendDiff = Number(b.sector_trend_score || -1) - Number(a.sector_trend_score || -1);
       if (trendDiff) return trendDiff;
       return Number(a.best_rank || 9999) - Number(b.best_rank || 9999);
@@ -452,9 +636,11 @@
     $("boardChips").querySelectorAll("button").forEach((button) => {
       button.addEventListener("click", () => {
         state.board = button.dataset.board || "all";
+        if (state.board !== "all") state.selectedBoard = state.board;
         const leaders = filteredLeaders();
         state.leaderCode = leaders[0] && leaders[0].code;
-        render();
+        renderDashboard();
+        renderViews();
       });
     });
   }
@@ -469,26 +655,53 @@
     return parts.map((part) => `<span class="signal-badge">${escapeHtml(part)}</span>`).join("");
   }
 
-  function leaderCard(leader) {
+  function renderMiniKline(chart, title = "K线缩略图") {
+    const candles = (chart?.candles || []).slice(-18);
+    if (!candles.length) return `<span class="mini-kline-empty">--</span>`;
+    const width = 112;
+    const height = 38;
+    const highs = candles.map((c) => Number(c.high)).filter(Number.isFinite);
+    const lows = candles.map((c) => Number(c.low)).filter(Number.isFinite);
+    const min = Math.min(...lows);
+    const max = Math.max(...highs);
+    const span = Math.max(max - min, 0.01);
+    const xStep = width / candles.length;
+    const yOf = (value) => 3 + (max - Number(value)) / span * (height - 6);
+    return `<svg class="mini-kline" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">${candles.map((c, index) => {
+      const x = index * xStep + xStep / 2;
+      const open = Number(c.open);
+      const close = Number(c.close);
+      const up = close >= open;
+      const yOpen = yOf(open);
+      const yClose = yOf(close);
+      const bodyY = Math.min(yOpen, yClose);
+      return `<line class="${up ? "up" : "down"}" x1="${x.toFixed(1)}" y1="${yOf(c.high).toFixed(1)}" x2="${x.toFixed(1)}" y2="${yOf(c.low).toFixed(1)}"></line><rect class="${up ? "up" : "down"}" x="${(x - 1.7).toFixed(1)}" y="${bodyY.toFixed(1)}" width="3.4" height="${Math.max(1.2, Math.abs(yClose - yOpen)).toFixed(1)}"></rect>`;
+    }).join("")}</svg>`;
+  }
+
+  function leaderCard(leader, index) {
     const active = state.leaderCode === leader.code ? " active" : "";
     const board = boardLabel(leader.board_path);
+    const ret = Number(leader.ret_5d);
+    const trend = Number(leader.sector_trend_score) >= 70 ? "强势" : Number(leader.sector_trend_score) >= 45 ? "轮动" : "观察";
+    const chart = (data.stockCharts || {})[normalizeCode(leader.code)] || { candles: [] };
     return `
-      <button class="leader-card${active}" type="button" data-code="${escapeHtml(leader.code)}" style="${styleVars(leader.board_path)}">
-        <div class="leader-top"><span>#${escapeHtml(leader.rank)}</span><span>${num(leader.combined_score, 1)}</span></div>
-        <h3>${escapeHtml(leader.name)}</h3>
-        <div class="board-tag">${escapeHtml(board)}</div>
-        <div class="leader-scores">
-          <span>Q ${num(leader.qlib_factor_score, 0)}</span>
-          <span>L ${num(leader.lumen_score_norm, 0)}</span>
-          <span>板 ${num(leader.sector_trend_score, 0)}</span>
-        </div>
-      </button>
+      <div class="leader-row${active}" data-code="${escapeHtml(leader.code)}" style="${styleVars(leader.board_path)}">
+        <span class="leader-rank">${index + 1}</span>
+        <button class="leader-stock" type="button" data-open-leader="${escapeHtml(leader.code)}"><strong>${escapeHtml(leader.name)}</strong><span>${escapeHtml(normalizeCode(leader.code))} · 人气 #${escapeHtml(leader.rank)}</span></button>
+        <span class="board-tag">${escapeHtml(board)}</span>
+        <strong class="leader-score">${num(leader.combined_score, 1)}</strong>
+        <span class="return ${ret >= 0 ? "up" : "down"}">${signedPct(ret)}</span>
+        <span class="trend-state ${trend === "强势" ? "strong" : trend === "轮动" ? "rotate" : "watch"}">${trend}</span>
+        <span class="leader-chart">${renderMiniKline(chart, `${leader.name} 18日K线`)}</span>
+        <button class="watch-toggle${isWatched(leader.code) ? " active" : ""}" type="button" data-watch="${escapeHtml(leader.code)}" aria-label="${isWatched(leader.code) ? "取消关注" : "加入自选"}">${isWatched(leader.code) ? "★" : "☆"}</button>
+      </div>
     `;
   }
 
   function renderLeaderLadder() {
     const leaders = filteredLeaders();
-    const title = state.board === "all" ? "显著信号优先" : `${boardLabel(state.board)}  |  ${leaders.length} 只`;
+    const title = state.board === "all" ? "综合强度排序，明确分类优先" : `${boardLabel(state.board)} · ${leaders.length} 只`;
     $("leaderSubhead").textContent = title;
     if (!leaders.length) {
       $("leaderLadder").innerHTML = `<div class="empty">当前板块暂无龙头样本</div>`;
@@ -497,22 +710,25 @@
     if (!state.leaderCode || !leaders.some((leader) => leader.code === state.leaderCode)) {
       state.leaderCode = leaders[0].code;
     }
-    const tiers = [
-      { label: "强信号", min: 80, rows: leaders.filter((item) => Number(item.combined_score) >= 80).slice(0, 14) },
-      { label: "共振", min: 70, rows: leaders.filter((item) => Number(item.combined_score) < 80 && Number(item.combined_score) >= 70).slice(0, 16) },
-      { label: "观察", min: 0, rows: leaders.filter((item) => Number(item.combined_score) < 70).slice(0, 18) },
-    ].filter((tier) => tier.rows.length);
-    $("leaderLadder").innerHTML = tiers
-      .map((tier, index) => `
-        <div class="ladder-row">
-          <div class="level-mark"><span class="level-num">${tiers.length - index}</span><span class="level-label">${escapeHtml(tier.label)}</span></div>
-          <div class="cards-row">${tier.rows.map(leaderCard).join("")}</div>
-        </div>
-      `)
-      .join("");
-    $("leaderLadder").querySelectorAll(".leader-card").forEach((card) => {
-      card.addEventListener("click", () => {
-        state.leaderCode = card.dataset.code;
+    const rows = leaders.slice(0, 24);
+    $("leaderLadder").innerHTML = `
+      <div class="leader-table-head"><span>#</span><span>股票</span><span>板块</span><span>综合</span><span>5日</span><span>趋势</span><span>18日K线</span><span></span></div>
+      ${rows.map(leaderCard).join("")}
+    `;
+    $("leaderLadder").querySelectorAll(".leader-row").forEach((row) => {
+      const select = () => {
+        state.leaderCode = row.dataset.code;
+        renderLeaderLadder();
+        renderLeaderDetail();
+      };
+      row.addEventListener("click", (event) => {
+        if (event.target.closest(".watch-toggle")) return;
+        select();
+      });
+    });
+    $("leaderLadder").querySelectorAll(".watch-toggle").forEach((button) => {
+      button.addEventListener("click", () => {
+        toggleWatch(button.dataset.watch);
         renderLeaderLadder();
         renderLeaderDetail();
       });
@@ -531,28 +747,33 @@
     $("detailScore").textContent = num(leader.combined_score, 1);
     $("leaderDetail").innerHTML = `
       <div class="detail-title">
-        <h3>${escapeHtml(leader.name)}</h3>
-        <p>${escapeHtml(leader.code)}  |  人气 #${escapeHtml(leader.rank)}  |  ${escapeHtml(leader.board_path)}</p>
+        <div><h3>${escapeHtml(leader.name)}</h3><p>${escapeHtml(normalizeCode(leader.code))} · 人气 #${escapeHtml(leader.rank)} · ${escapeHtml(boardLabel(leader.board_path))}</p></div>
+        <button class="detail-watch${isWatched(leader.code) ? " active" : ""}" type="button" data-detail-watch="${escapeHtml(leader.code)}">${isWatched(leader.code) ? "★ 已关注" : "☆ 加自选"}</button>
       </div>
       <div class="score-bars">
         ${scoreLine("综合", leader.combined_score, "#ef4444")}
-        ${scoreLine("qlib", leader.qlib_factor_score, "#2f7df6")}
-        ${scoreLine("LumenAlpha", leader.lumen_score_norm, "#d97706")}
-        ${scoreLine("板块", leader.sector_trend_score, "#059669")}
+        ${scoreLine("量价强度", leader.qlib_factor_score, "#2f7df6")}
+        ${scoreLine("技术形态", leader.lumen_score_norm, "#d97706")}
+        ${scoreLine("板块动能", leader.sector_trend_score, "#059669")}
       </div>
-      <div class="signal-stack">${signalBadges(leader.top_signals)}</div>
       <div class="detail-kv">
         <div class="kv"><span>5日涨幅</span><strong>${pct(leader.ret_5d)}</strong></div>
         <div class="kv"><span>20日涨幅</span><strong>${pct(leader.ret_20d)}</strong></div>
-        <div class="kv"><span>板块5日</span><strong>${pct(leader.sector_ret_5d)}</strong></div>
-        <div class="kv"><span>板块20日</span><strong>${pct(leader.sector_ret_20d)}</strong></div>
+        <div class="kv"><span>相对20日均线</span><strong>${signedPct(leader.ma20_bias)}</strong></div>
+        <div class="kv"><span>量能变化</span><strong>${signedPct(leader.volume_ratio_20)}</strong></div>
       </div>
       <div class="kline-block">
         <div class="kline-head"><strong>30日K线</strong><span>近5日显著信号 ${chart.markers ? chart.markers.length : 0}</span></div>
         ${renderKlineChart(chart, `${leader.name} 30日K线`)}
       </div>
+      <details class="signal-details"><summary>查看原始信号依据</summary><div class="signal-stack">${signalBadges(leader.top_signals)}</div></details>
       ${renderAiResult(key, "个股AI分析")}
     `;
+    $("leaderDetail").querySelector("[data-detail-watch]")?.addEventListener("click", (event) => {
+      toggleWatch(event.currentTarget.dataset.detailWatch);
+      renderLeaderLadder();
+      renderLeaderDetail();
+    });
     attachAiButton($("leaderDetail"), "stock", normalizeCode(leader.code), () => stockAiContext(leader, chart), renderLeaderDetail);
   }
 
@@ -578,17 +799,20 @@
     return "#64748b";
   }
 
-  function renderKlineChart(chart, title = "30日K线") {
-    const candles = (chart && chart.candles) || [];
+  function renderKlineChart(chart, title = "30日K线", windowSize = 30) {
+    const allCandles = (chart && chart.candles) || [];
+    const candles = allCandles.slice(-windowSize);
     const markers = (chart && chart.markers) || [];
     if (!candles.length) {
       return `<div class="empty">暂无 K 线数据</div>`;
     }
-    const width = 360;
-    const height = 210;
-    const pad = { left: 24, right: 12, top: 22, bottom: 24 };
+    const width = 560;
+    const height = 300;
+    const pad = { left: 42, right: 14, top: 24, bottom: 22 };
     const plotW = width - pad.left - pad.right;
-    const plotH = height - pad.top - pad.bottom;
+    const priceH = 184;
+    const volumeTop = 224;
+    const volumeH = 48;
     const highs = candles.map((c) => Number(c.high)).filter(Number.isFinite);
     const lows = candles.map((c) => Number(c.low)).filter(Number.isFinite);
     markers.forEach((m) => {
@@ -601,7 +825,7 @@
     const min = Math.min(...lows);
     const max = Math.max(...highs);
     const span = Math.max(max - min, 0.01);
-    const yOf = (value) => pad.top + (max - Number(value)) / span * plotH;
+    const yOf = (value) => pad.top + (max - Number(value)) / span * priceH;
     const xOf = (index) => pad.left + (index + 0.5) / candles.length * plotW;
     const bodyW = Math.max(3, Math.min(8, plotW / candles.length * 0.55));
     const dateToIndex = new Map(candles.map((c, index) => [c.date, index]));
@@ -622,9 +846,26 @@
         <rect class="kline-body ${cls}" x="${(x - bodyW / 2).toFixed(1)}" y="${bodyY.toFixed(1)}" width="${bodyW.toFixed(1)}" height="${bodyH.toFixed(1)}"></rect>
       `;
     }).join("");
+    const maxVolume = Math.max(...candles.map((c) => Number(c.volume || 0)), 1);
+    const volumeSvg = candles.map((c, index) => {
+      const volume = Number(c.volume || 0);
+      const barH = volume / maxVolume * volumeH;
+      const up = Number(c.close) >= Number(c.open);
+      return `<rect class="kline-volume ${up ? "up" : "down"}" x="${(xOf(index) - bodyW / 2).toFixed(1)}" y="${(volumeTop + volumeH - barH).toFixed(1)}" width="${bodyW.toFixed(1)}" height="${Math.max(1, barH).toFixed(1)}"></rect>`;
+    }).join("");
+    function movingAverage(size) {
+      return candles.map((candle, index) => {
+        if (index < size - 1) return null;
+        const rows = candles.slice(index - size + 1, index + 1);
+        return rows.reduce((sum, row) => sum + Number(row.close), 0) / size;
+      });
+    }
+    function averagePath(size) {
+      return movingAverage(size).map((value, index) => value == null ? null : `${index === size - 1 ? "M" : "L"}${xOf(index).toFixed(1)},${yOf(value).toFixed(1)}`).filter(Boolean).join(" ");
+    }
     const visibleMarkers = markers
       .filter((m) => dateToIndex.has(m.date))
-      .slice(-10);
+      .slice(-6);
     const markerSvg = visibleMarkers.map((m, markerIndex) => {
       const index = dateToIndex.get(m.date);
       const candle = candles[index];
@@ -646,58 +887,56 @@
     }).join("");
     const start = candles[0]?.date?.slice(5) || "";
     const end = candles[candles.length - 1]?.date?.slice(5) || "";
+    const grid = [0, 0.5, 1].map((ratio) => {
+      const y = pad.top + priceH * ratio;
+      const value = max - span * ratio;
+      return `<line class="kline-grid" x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"></line><text class="kline-y-label" x="4" y="${y + 3}">${num(value, 2)}</text>`;
+    }).join("");
     return `
       <svg class="kline-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">
-        <line class="kline-axis" x1="${pad.left}" y1="${pad.top + plotH}" x2="${width - pad.right}" y2="${pad.top + plotH}"></line>
-        <line class="kline-axis" x1="${pad.left}" y1="${pad.top}" x2="${pad.left}" y2="${pad.top + plotH}"></line>
+        ${grid}
+        <line class="kline-axis" x1="${pad.left}" y1="${pad.top + priceH}" x2="${width - pad.right}" y2="${pad.top + priceH}"></line>
         <text x="${pad.left}" y="14" font-size="10" fill="#64748b">${escapeHtml(title)}</text>
+        <text class="kline-legend ma5" x="${width - 132}" y="14">MA5</text>
+        <text class="kline-legend ma10" x="${width - 92}" y="14">MA10</text>
+        <text class="kline-legend ma20" x="${width - 48}" y="14">MA20</text>
         <text x="${pad.left}" y="${height - 6}" font-size="9" fill="#94a3b8">${escapeHtml(start)}</text>
         <text x="${width - pad.right - 28}" y="${height - 6}" font-size="9" fill="#94a3b8">${escapeHtml(end)}</text>
         ${candleSvg}
+        <path class="ma-line ma5" d="${averagePath(5)}"></path>
+        <path class="ma-line ma10" d="${averagePath(10)}"></path>
+        <path class="ma-line ma20" d="${averagePath(20)}"></path>
         ${markerSvg}
-      </svg>
-    `;
-  }
-
-  function sparkline(rows, path) {
-    if (!rows || rows.length < 2) {
-      return `<svg class="sparkline" viewBox="0 0 220 66" role="img" aria-label="暂无曲线"><line class="axis" x1="0" y1="54" x2="220" y2="54"></line></svg>`;
-    }
-    const values = rows.map((row) => Number(row.sector_index)).filter(Number.isFinite);
-    const min = Math.min(...values);
-    const max = Math.max(...values);
-    const span = Math.max(max - min, 1);
-    const points = rows.map((row, index) => {
-      const x = (index / Math.max(rows.length - 1, 1)) * 220;
-      const y = 56 - ((Number(row.sector_index) - min) / span) * 48;
-      return [x, y];
-    });
-    const line = points.map(([x, y], index) => `${index ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-    const area = `${line} L220,62 L0,62 Z`;
-    return `
-      <svg class="sparkline" viewBox="0 0 220 66" role="img" aria-label="${escapeHtml(boardLabel(path))}趋势">
-        <line class="axis" x1="0" y1="56" x2="220" y2="56"></line>
-        <path class="area" d="${area}"></path>
-        <path class="line" d="${line}"></path>
+        <line class="kline-axis" x1="${pad.left}" y1="${volumeTop + volumeH}" x2="${width - pad.right}" y2="${volumeTop + volumeH}"></line>
+        <text class="kline-volume-label" x="4" y="${volumeTop + 10}">成交量</text>
+        ${volumeSvg}
       </svg>
     `;
   }
 
   function renderSectorTrends() {
-    const curveMap = curvesByBoard();
-    const boards = [...(data.boards || [])].sort((a, b) => Number(b.sector_trend_score || -1) - Number(a.sector_trend_score || -1));
+    const boards = [...(data.boards || [])]
+      .filter(isClassifiedBoard)
+      .sort((a, b) => Number(b.sector_trend_score || -1) - Number(a.sector_trend_score || -1));
     const visible = state.board === "all" ? boards : boards.filter((board) => board.board_path === state.board);
-    if (!state.selectedBoard || !boards.some((board) => board.board_path === state.selectedBoard)) {
-      state.selectedBoard = visible[0]?.board_path || boards[0]?.board_path || null;
+    const chartBoards = boards.filter((board) => (data.boardCharts || {})[board.board_path]?.candles?.length).length;
+    $("coverageBadge").textContent = `K线覆盖 ${chartBoards}/${boards.length}`;
+    if (!visible.length) {
+      state.selectedBoard = null;
+      $("sectorTrends").innerHTML = `<div class="empty">当前筛选下暂无明确分类板块 K 线。</div>`;
+      renderBoardDetail();
+      return;
     }
-    const curveBoards = boards.filter((board) => curveMap.has(board.board_path)).length;
-    $("coverageBadge").textContent = `曲线覆盖 ${curveBoards}/${boards.length}`;
+    if (!state.selectedBoard || !visible.some((board) => board.board_path === state.selectedBoard)) {
+      state.selectedBoard = visible[0]?.board_path || null;
+    }
     $("sectorTrends").innerHTML = visible
       .map((board) => {
         const toneStyle = styleVars(board.board_path);
-        const rows = (curveMap.get(board.board_path) || []).slice(-state.boardWindow);
+        const chart = (data.boardCharts || {})[board.board_path] || { candles: [] };
+        const rows = (chart.candles || []).slice(-state.boardWindow);
         const active = state.selectedBoard === board.board_path ? " active" : "";
-        const intervalRet = rows.length >= 2 ? Number(rows[rows.length - 1].sector_index) / Number(rows[0].sector_index) - 1 : NaN;
+        const intervalRet = rows.length >= 2 ? Number(rows[rows.length - 1].close) / Number(rows[0].close) - 1 : NaN;
         return `
           <article class="trend-card${active}" style="${toneStyle}" data-board="${escapeHtml(board.board_path)}">
             <div class="trend-head">
@@ -707,11 +946,10 @@
               </div>
               <div class="trend-score">${num(board.sector_trend_score, 0)}</div>
             </div>
-            ${sparkline(rows, board.board_path)}
+            ${renderMiniKline({ candles: rows }, `${boardLabel(board.board_path)} ${state.boardWindow}日K线`)}
             <div class="trend-meta">
-              <span>${state.boardWindow}日 ${pct(intervalRet)}</span>
-              <span>5日 ${pct(board.sector_ret_5d)}</span>
-              <span>20日 ${pct(board.sector_ret_20d)}</span>
+              <span class="${Number(intervalRet) >= 0 ? "up" : "down"}">${state.boardWindow}日 ${signedPct(intervalRet)}</span>
+              <span>样本 ${board.curve_member_count || 0}/${board.stock_count || 0}</span>
             </div>
           </article>
         `;
@@ -727,7 +965,12 @@
   }
 
   function renderBoardDetail() {
-    const board = (data.boards || []).find((item) => item.board_path === state.selectedBoard) || (data.boards || [])[0];
+    if (!state.selectedBoard && state.board !== "all") {
+      $("boardDetail").innerHTML = `<div class="empty">当前筛选下暂无板块详情。</div>`;
+      return;
+    }
+    const fallback = (data.boards || []).find(isClassifiedBoard);
+    const board = (data.boards || []).find((item) => item.board_path === state.selectedBoard) || fallback;
     if (!board) {
       $("boardDetail").innerHTML = `<div class="empty">暂无板块数据</div>`;
       return;
@@ -745,8 +988,8 @@
           <span class="score-pill">${num(board.sector_trend_score, 0)}</span>
         </div>
         <div class="kline-block">
-          <div class="kline-head"><strong>板块30日K线</strong><span>近5日显著信号 ${chart.markers ? chart.markers.length : 0}</span></div>
-          ${renderKlineChart(chart, `${boardLabel(board.board_path)} 板块30日K线`)}
+          <div class="kline-head"><strong>板块${state.boardWindow}日K线</strong><span>近5日显著信号 ${chart.markers ? chart.markers.length : 0}</span></div>
+          ${renderKlineChart(chart, `${boardLabel(board.board_path)} 板块${state.boardWindow}日K线`, state.boardWindow)}
         </div>
         ${renderAiResult(key, "板块AI分析")}
       </div>
@@ -767,8 +1010,9 @@
   }
 
   function renderSignalTable() {
-    const rows = filteredSignals().slice(0, 42);
-    const totalRows = filteredSignals().length;
+    const allRows = filteredSignals();
+    const rows = allRows.slice(0, 42);
+    const totalRows = allRows.length;
     $("signalResultCount").textContent = `当前 ${rows.length}/${totalRows}`;
     if (!rows.length) {
       $("signalTable").innerHTML = `<div class="empty">当前板块暂无信号</div>`;
@@ -813,6 +1057,7 @@
     $("reviewFindings").innerHTML = notes.map((note) => `<div class="review-item">${escapeHtml(note)}</div>`).join("");
 
     const boards = [...(data.boards || [])]
+      .filter(isClassifiedBoard)
       .sort((a, b) => Number(b.sector_trend_score || -1) - Number(a.sector_trend_score || -1))
       .slice(0, 18);
     $("reviewBoards").innerHTML = boards
@@ -829,13 +1074,223 @@
       .join("");
   }
 
+  function renderAuth() {
+    const user = state.authUser;
+    const label = $("authButtonLabel");
+    const button = $("authButton");
+    if (!label || !button) return;
+    label.textContent = user ? user.username : "登录";
+    button.classList.toggle("signed-in", Boolean(user));
+    button.classList.toggle("https-required", state.authReady && !state.authAvailable);
+    button.setAttribute("aria-haspopup", user ? "menu" : "dialog");
+    button.setAttribute("aria-expanded", user && !$("accountMenu").hidden ? "true" : "false");
+    button.querySelector(".auth-avatar").textContent = user ? user.username.slice(0, 1).toUpperCase() : "人";
+    $("accountUsername").textContent = user?.username || "--";
+    if (!user) $("accountMenu").hidden = true;
+    $("authSecurityNotice").hidden = !state.authReady || state.authAvailable;
+    $("authForm").querySelectorAll("input, button").forEach((control) => {
+      control.disabled = !state.authReady || !state.authAvailable || state.authSubmitting;
+    });
+    $("authSubmit").textContent = state.authSubmitting ? "处理中..." : state.authMode === "register" ? "创建账号" : "登录";
+  }
+
+  function setAuthMode(mode) {
+    state.authMode = mode === "register" ? "register" : "login";
+    $("authTitle").textContent = state.authMode === "register" ? "注册 LumenAlpha" : "登录 LumenAlpha";
+    document.querySelectorAll(".auth-tab").forEach((button) => {
+      const active = button.dataset.authMode === state.authMode;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    });
+    const confirmField = $("confirmPasswordField");
+    confirmField.hidden = state.authMode !== "register";
+    $("authPasswordConfirm").required = state.authMode === "register";
+    $("authPassword").autocomplete = state.authMode === "register" ? "new-password" : "current-password";
+    $("authError").hidden = true;
+    renderAuth();
+  }
+
+  function openAuthDialog(mode = "login") {
+    setAuthMode(mode);
+    $("accountMenu").hidden = true;
+    const dialog = $("authDialog");
+    if (!dialog.open) dialog.showModal();
+    if (state.authAvailable) requestAnimationFrame(() => $("authUsername").focus());
+  }
+
+  function refreshAccountViews() {
+    renderAuth();
+    renderWatchCount();
+    if (state.view === "dashboard") {
+      renderLeaderLadder();
+      renderLeaderDetail();
+    }
+    if (state.view === "watchlist") renderWatchlist();
+  }
+
+  async function syncAccountWatchlist() {
+    if (!state.authUser) return;
+    const remote = await apiRequest("/api/watchlist");
+    const remoteCodes = new Set((remote.codes || []).map(normalizeCode).filter(Boolean));
+    const guestCodes = readGuestWatchlist();
+    for (const code of guestCodes) {
+      if (remoteCodes.has(code)) continue;
+      const synced = await apiRequest("/api/watchlist", { method: "POST", body: { code } });
+      (synced.codes || []).forEach((item) => remoteCodes.add(normalizeCode(item)));
+    }
+    clearGuestWatchlist();
+    state.watchlist = [...remoteCodes].filter(Boolean);
+  }
+
+  async function loadAuthState() {
+    try {
+      const payload = await apiRequest("/api/auth/me");
+      state.authUser = payload.user || null;
+      state.authAvailable = payload.authAvailable !== false;
+      if (state.authUser) await syncAccountWatchlist();
+      else state.watchlist = readGuestWatchlist();
+    } catch (_error) {
+      state.authUser = null;
+      state.authAvailable = false;
+      state.watchlist = readGuestWatchlist();
+    } finally {
+      state.authReady = true;
+      refreshAccountViews();
+    }
+  }
+
+  async function submitAuthForm(event) {
+    event.preventDefault();
+    if (!state.authAvailable || state.authSubmitting) return;
+    const username = $("authUsername").value.trim();
+    const password = $("authPassword").value;
+    const confirm = $("authPasswordConfirm").value;
+    const error = $("authError");
+    if (state.authMode === "register" && password !== confirm) {
+      error.textContent = "两次输入的密码不一致";
+      error.hidden = false;
+      return;
+    }
+    state.authSubmitting = true;
+    error.hidden = true;
+    $("authForm").setAttribute("aria-busy", "true");
+    renderAuth();
+    try {
+      const payload = await apiRequest(`/api/auth/${state.authMode}`, { method: "POST", body: { username, password } });
+      state.authUser = payload.user;
+      await syncAccountWatchlist();
+      $("authDialog").close();
+      $("authForm").reset();
+      refreshAccountViews();
+    } catch (authError) {
+      error.textContent = authError.message;
+      error.hidden = false;
+    } finally {
+      state.authSubmitting = false;
+      $("authForm").setAttribute("aria-busy", "false");
+      renderAuth();
+    }
+  }
+
+  async function logoutAccount() {
+    try {
+      await apiRequest("/api/auth/logout", { method: "POST" });
+    } catch (_error) {
+      // The local account state still needs to be cleared if the session expired.
+    }
+    state.authUser = null;
+    state.watchlist = readGuestWatchlist();
+    $("accountMenu").hidden = true;
+    refreshAccountViews();
+  }
+
+  function bindAuth() {
+    $("authButton")?.addEventListener("click", () => {
+      if (state.authUser) {
+        $("accountMenu").hidden = !$("accountMenu").hidden;
+        renderAuth();
+      } else {
+        openAuthDialog("login");
+      }
+    });
+    $("logoutButton")?.addEventListener("click", logoutAccount);
+    $("authClose")?.addEventListener("click", () => $("authDialog").close());
+    $("authDialog")?.addEventListener("cancel", () => $("authDialog").close());
+    document.querySelectorAll(".auth-tab").forEach((button) => button.addEventListener("click", () => setAuthMode(button.dataset.authMode)));
+    $("authForm")?.addEventListener("submit", submitAuthForm);
+    $("passwordToggle")?.addEventListener("click", () => {
+      const password = $("authPassword");
+      const showing = password.type === "text";
+      password.type = showing ? "password" : "text";
+      $("passwordToggle").textContent = showing ? "显示" : "隐藏";
+      $("passwordToggle").setAttribute("aria-label", showing ? "显示密码" : "隐藏密码");
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".auth-control")) {
+        $("accountMenu").hidden = true;
+        renderAuth();
+      }
+    });
+  }
+
+  function renderWatchCount() {
+    const count = state.watchlist.length;
+    if ($("watchCount")) $("watchCount").textContent = count;
+    if ($("watchlistStatus")) $("watchlistStatus").textContent = `${count} 只`;
+  }
+
+  function renderWatchlist() {
+    renderWatchCount();
+    const hint = $("watchlistHint");
+    if (state.authUser) {
+      hint.textContent = `已登录为 ${state.authUser.username}，自选会自动跨设备同步`;
+    } else {
+      hint.innerHTML = `访客数据仅保存在当前浏览器 <button type="button" data-watchlist-login>登录同步</button>`;
+      hint.querySelector("[data-watchlist-login]")?.addEventListener("click", () => openAuthDialog("login"));
+    }
+    const watched = state.watchlist
+      .map((code) => (data.leaders || []).find((leader) => normalizeCode(leader.code) === code))
+      .filter(Boolean);
+    if (!watched.length) {
+      $("watchlistContent").innerHTML = `<div class="watchlist-empty"><strong>还没有自选股票</strong><p>在龙头观察或个股拆解中点击星标，就会出现在这里。</p><button type="button" data-go-leaders>去看龙头</button>${state.authUser ? "" : `<button class="secondary" type="button" data-empty-login>登录账号</button>`}</div>`;
+      $("watchlistContent").querySelector("[data-go-leaders]")?.addEventListener("click", () => {
+        state.view = "dashboard";
+        state.section = "leadersSection";
+        state.mode = "overview";
+        state.activeDashboardNav = "龙头观察";
+        renderViews();
+      });
+      $("watchlistContent").querySelector("[data-empty-login]")?.addEventListener("click", () => openAuthDialog("login"));
+      return;
+    }
+    $("watchlistContent").innerHTML = `<div class="leader-table-head"><span>#</span><span>股票</span><span>板块</span><span>综合</span><span>5日</span><span>趋势</span><span>18日K线</span><span></span></div>${watched.map(leaderCard).join("")}`;
+    $("watchlistContent").querySelectorAll(".leader-row").forEach((row) => {
+      row.addEventListener("click", (event) => {
+        if (event.target.closest(".watch-toggle")) return;
+        state.leaderCode = row.dataset.code;
+        state.view = "dashboard";
+        state.section = "leadersSection";
+        state.mode = "overview";
+        state.activeDashboardNav = "龙头观察";
+        renderDashboard();
+        renderViews();
+      });
+    });
+    $("watchlistContent").querySelectorAll(".watch-toggle").forEach((button) => {
+      button.addEventListener("click", () => {
+        toggleWatch(button.dataset.watch);
+        renderWatchlist();
+      });
+    });
+  }
+
   function renderMerge() {
     const flow = [
       ["qlib", "标准因子与模型框架", "Alpha158 / Alpha360 / 表达式因子 / 后续回测"],
       ["LumenAlpha", "解释性技术信号", "基础指标 / 普通信号 / 组合信号 / 高级形态"],
       ["Taxonomy", "科技板块分层", "一级科技 + 二级主线 + 三级细分板块"],
       ["Signal Table", "统一信号表", "source_project / signal_name / score / evidence"],
-      ["Dashboard", "轮动工作台", "龙头显著信号 + 板块时间曲线 + 因子图谱"],
+      ["Dashboard", "轮动工作台", "龙头显著信号 + 板块K线 + 因子解释"],
     ];
     $("mergeFlow").innerHTML = flow
       .map(([title, subtitle, body], index) => `
@@ -947,10 +1402,35 @@
       return;
     }
     const key = aiKey("daily", "latest");
+    const boards = [...(data.boards || [])]
+      .filter(isClassifiedBoard)
+      .sort((a, b) => Number(b.sector_trend_score || -1) - Number(a.sector_trend_score || -1));
+    const leaders = filteredLeaders().slice(0, 5);
+    const strong = boards.slice(0, 3);
+    const weak = [...boards].sort((a, b) => Number(a.sector_trend_score || 999) - Number(b.sector_trend_score || 999)).slice(0, 3);
+    const review = data.review || {};
     target.innerHTML = `
       ${renderAiResult(key, "日报AI分析")}
-      ${renderMarkdownLite(state.dailyReportText)}
+      <div class="daily-summary-grid">
+        <section class="daily-block primary"><span>一句话结论</span><strong>${escapeHtml(strong.length ? `${boardLabel(strong[0].board_path)}领涨，主线集中在${strong.map((board) => boardLabel(board.board_path)).join("、")}` : "当前没有足够数据形成明确主线")}</strong><p>先观察板块强度是否延续，再结合个股量价确认。</p></section>
+        <section class="daily-block"><span>机会方向</span>${strong.map((board, index) => `<div class="daily-row"><em>${index + 1}</em><strong>${escapeHtml(boardLabel(board.board_path))}</strong><b>${num(board.sector_trend_score, 0)}</b></div>`).join("")}</section>
+        <section class="daily-block risk"><span>降温与风险</span>${weak.map((board) => `<div class="daily-row"><strong>${escapeHtml(boardLabel(board.board_path))}</strong><b>强度 ${num(board.sector_trend_score, 0)}</b></div>`).join("")}</section>
+        <section class="daily-block"><span>重点观察</span>${leaders.map((leader) => `<button class="daily-leader" type="button" data-daily-code="${escapeHtml(leader.code)}"><strong>${escapeHtml(leader.name)}</strong><em>${escapeHtml(boardLabel(leader.board_path))}</em><b>${num(leader.combined_score, 1)}</b></button>`).join("")}</section>
+      </div>
+      <div class="daily-health"><span>历史覆盖 ${escapeHtml(review.history_ok || 0)}/${escapeHtml(review.history_total || 0)}</span><span>统一信号 ${escapeHtml(review.unified_signal_rows || 0)} 条</span><span>缺失 ${escapeHtml(review.history_missing || 0)} 只</span></div>
+      <details class="report-details"><summary>查看完整量化数据报告</summary><div class="markdown-report">${renderMarkdownLite(state.dailyReportText)}</div></details>
     `;
+    target.querySelectorAll("[data-daily-code]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.leaderCode = button.dataset.dailyCode;
+        state.view = "dashboard";
+        state.section = "leadersSection";
+        state.mode = "overview";
+        state.activeDashboardNav = "龙头观察";
+        renderDashboard();
+        renderViews();
+      });
+    });
     attachAiButton(target, "daily", "latest", dailyAiContext, renderDailyAnalysis);
   }
 
@@ -983,7 +1463,7 @@
       items = items.filter((item) => item.project === state.factorProject);
     }
     if (state.factorFamily !== "all") {
-      items = items.filter((item) => item.family === state.factorFamily);
+      items = items.filter((item) => factorGroup(item) === state.factorFamily);
     }
     const keyword = state.factorSearch.trim().toLowerCase();
     if (keyword) {
@@ -1006,22 +1486,48 @@
     return items;
   }
 
+  function factorGroup(item) {
+    const text = [item.name, item.category, item.meaning, item.formula, item.family].join(" ").toLowerCase();
+    if (/k线|形态|反包|影线|实体|偏移|支撑|背离|反转/.test(text)) return "K线形态";
+    if (/波动|风险|std|振幅|回撤|volatility/.test(text)) return "波动风险";
+    if (/趋势|均线|ma|slope|beta|突破|多头|空头/.test(text)) return "趋势";
+    if (/动量|momentum|roc|涨跌|收益/.test(text)) return "动量";
+    if (/量|volume|资金|成交/.test(text)) return "成交量";
+    if (/热度|人气|排名|rank|关注/.test(text)) return "市场热度";
+    return "其他";
+  }
+
+  function driverState(value) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return { label: "数据不足", tone: "neutral", note: "当前样本不足，暂不参与判断。" };
+    if (n >= 70) return { label: "偏强", tone: "bullish", note: "在当前样本中处于较强区间。" };
+    if (n >= 45) return { label: "中性", tone: "neutral", note: "没有形成明显优势或风险。" };
+    return { label: "偏弱", tone: "bearish", note: "该维度落后于多数样本，需要谨慎。" };
+  }
+
   function renderFactorMetrics() {
     const stats = factorCatalog.stats || {};
-    const byProject = stats.byProject || {};
-    const byFamily = stats.byFamily || {};
-    const items = [
-      ["总条目", stats.total || (factorCatalog.items || []).length],
-      ["qlib", byProject.qlib || 0],
-      ["LumenAlpha", byProject.LumenAlpha || 0],
-      ["Alpha158", byFamily.Alpha158 || 0],
-      ["Alpha360", byFamily.Alpha360 || 0],
-    ];
-    $("factorGeneratedAt").textContent = `${factorCatalog.generatedAt || "--"}  |  标准因子与信号目录`;
+    const leader = (data.leaders || []).find((item) => item.code === state.leaderCode) || filteredLeaders()[0] || (data.leaders || [])[0];
+    const chart = leader ? (data.stockCharts || {})[normalizeCode(leader.code)] || { candles: [] } : { candles: [] };
+    const drivers = leader ? [
+      ["趋势", leader.qlib_ma20_bias_rank, "股价相对20日均线的位置"],
+      ["动量", (Number(leader.qlib_mom_5_rank || 0) + Number(leader.qlib_mom_20_rank || 0)) / 2, "近期涨幅在样本中的强弱"],
+      ["成交量", leader.qlib_volume_rank, "当前量能相对近20日是否活跃"],
+      ["波动风险", leader.qlib_volatility_rank, "波动越可控，分数越高"],
+      ["市场热度", leader.popularity_score, "东方财富人气排名转化的热度"],
+    ] : [];
+    $("factorGeneratedAt").textContent = `${factorCatalog.generatedAt || "--"} · 公式默认折叠`;
     $("factorTotal").textContent = `当前 ${factorItems().length}/${stats.total || 0}`;
-    $("factorMetrics").innerHTML = items
-      .map(([label, value]) => `<div class="factor-metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`)
-      .join("");
+    $("factorInsights").innerHTML = leader ? `
+      <div class="factor-stock-summary">
+        <div><span>当前解释对象</span><h3>${escapeHtml(leader.name)} <small>${escapeHtml(normalizeCode(leader.code))}</small></h3><p>${escapeHtml(boardLabel(leader.board_path))} · 综合分 ${num(leader.combined_score, 1)}</p></div>
+        <div class="factor-stock-kline">${renderMiniKline(chart, `${leader.name} 因子解释K线`)}</div>
+      </div>
+      <div class="driver-list">${drivers.map(([label, value, meaning]) => {
+        const status = driverState(value);
+        return `<div class="driver-row"><div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(meaning)}</span></div><div class="driver-bar"><i style="--w:${clamp(value)}%"></i></div><b>${num(value, 0)}</b><em class="${status.tone}">${status.label}</em><p>${escapeHtml(status.note)}</p></div>`;
+      }).join("")}</div>
+    ` : `<div class="empty">暂无可解释股票</div>`;
   }
 
   function renderFactorTabs() {
@@ -1029,7 +1535,7 @@
     $("factorProjectTabs").innerHTML = projects
       .map((project) => {
         const active = state.factorProject === project ? " active" : "";
-        const label = project === "all" ? "全部项目" : projectLabel(project);
+        const label = project === "all" ? "全部来源" : projectLabel(project);
         return `<button class="factor-tab${active}" type="button" data-project="${escapeHtml(project)}">${escapeHtml(label)}</button>`;
       })
       .join("");
@@ -1037,50 +1543,48 @@
       button.addEventListener("click", () => {
         state.factorProject = button.dataset.project || "all";
         state.factorFamily = "all";
+        state.factorLimit = 24;
         renderFactors();
       });
     });
 
-    const familyBase = state.factorProject === "all"
-      ? factorCatalog.items || []
-      : (factorCatalog.items || []).filter((item) => item.project === state.factorProject);
-    const families = ["all", ...new Set(familyBase.map((item) => item.family))];
+    const familyBase = state.factorProject === "all" ? factorCatalog.items || [] : (factorCatalog.items || []).filter((item) => item.project === state.factorProject);
+    const order = ["趋势", "动量", "成交量", "波动风险", "K线形态", "市场热度", "其他"];
+    const available = new Set(familyBase.map(factorGroup));
+    const families = ["all", ...order.filter((item) => available.has(item))];
     $("factorFamilyTabs").innerHTML = families
       .map((family) => {
         const active = state.factorFamily === family ? " active" : "";
-        const label = family === "all" ? "全部特征族" : family;
+        const label = family === "all" ? "全部主题" : family;
         return `<button class="factor-tab${active}" type="button" data-family="${escapeHtml(family)}">${escapeHtml(label)}</button>`;
       })
       .join("");
     $("factorFamilyTabs").querySelectorAll("button").forEach((button) => {
       button.addEventListener("click", () => {
         state.factorFamily = button.dataset.family || "all";
+        state.factorLimit = 24;
         renderFactors();
       });
     });
   }
 
   function renderFactorNotes() {
-    $("factorNotes").innerHTML = (factorCatalog.notes || [])
-      .map((note) => `<div class="factor-note">${escapeHtml(note)}</div>`)
-      .join("");
+    $("factorNotes").innerHTML = `<div class="factor-note"><strong>怎么看：</strong>先看上方五个维度，再按主题查具体因子；公式只是计算依据，不是操作建议。</div>`;
   }
 
   function factorRow(item) {
     const score = item.score === "" || item.score === null || item.score === undefined ? "--" : item.score;
-    const params = item.parameters ? `参数 ${item.parameters}` : "";
-    const notes = item.notes ? `<br>${escapeHtml(item.notes)}` : "";
+    const params = item.parameters ? `参数 ${item.parameters}` : "无额外参数";
+    const status = Number(score) > 0 ? "偏多" : Number(score) < 0 ? "偏空" : "解释项";
     return `
       <div class="factor-row">
-        <span class="source ${sourceClass(item.project)}">${escapeHtml(projectLabel(item.project))}</span>
         <div class="factor-name">
           <strong>${escapeHtml(item.name)}</strong>
-          <span>${escapeHtml(item.family)}</span>
+          <span>${escapeHtml(factorGroup(item))} · ${escapeHtml(projectLabel(item.project))}</span>
         </div>
-        <div class="factor-category">${escapeHtml(item.category || "--")}<br>${escapeHtml(params)}</div>
-        <div class="factor-meaning">${escapeHtml(item.meaning || "--")}${notes}</div>
-        <div class="factor-formula"><code>${escapeHtml(item.formula || item.source_file || "--")}</code></div>
-        <div class="factor-score">${escapeHtml(score)}</div>
+        <div class="factor-meaning"><span>它代表什么</span><p>${escapeHtml(item.meaning || "暂无通俗解释")}</p></div>
+        <span class="factor-status">${escapeHtml(status)}</span>
+        <details class="factor-method"><summary>查看计算方法</summary><div><code>${escapeHtml(item.formula || "未提供公式")}</code><p>${escapeHtml(params)} · 来源 ${escapeHtml(item.source_file || item.family || "--")}</p></div></details>
       </div>
     `;
   }
@@ -1092,12 +1596,13 @@
       $("factorCatalog").innerHTML = `<div class="empty">没有匹配的因子或信号</div>`;
       return;
     }
-    $("factorCatalog").innerHTML = `
-      <div class="factor-table-head">
-        <span>项目</span><span>名称</span><span>类别</span><span>含义</span><span>公式/来源</span><span>分值</span>
-      </div>
-      ${items.map(factorRow).join("")}
-    `;
+    const visible = items.slice(0, state.factorLimit);
+    $("factorTotal").textContent = `匹配 ${items.length} · 显示 ${visible.length}`;
+    $("factorCatalog").innerHTML = `${visible.map(factorRow).join("")}${visible.length < items.length ? `<button id="factorMore" class="load-more" type="button">再显示 ${Math.min(24, items.length - visible.length)} 条</button>` : ""}`;
+    $("factorMore")?.addEventListener("click", () => {
+      state.factorLimit += 24;
+      renderFactorCatalog();
+    });
   }
 
   function renderFactors() {
@@ -1111,33 +1616,40 @@
     document.querySelectorAll(".view").forEach((view) => {
       view.classList.toggle("active", view.id === `${state.view}View`);
     });
-    document.querySelectorAll(".nav-item").forEach((item) => {
+    const dashboard = $("dashboardView");
+    if (dashboard) dashboard.dataset.section = state.section || "overviewSection";
+    document.querySelectorAll(".nav-item, .mobile-nav-item, .mobile-menu-item").forEach((item) => {
       const view = item.dataset.view || "dashboard";
-      if (state.view !== "dashboard") {
-        item.classList.toggle("active", view === state.view);
-      } else {
-        item.classList.toggle("active", view === "dashboard" && item.textContent.includes(state.activeDashboardNav));
-      }
+      const section = item.dataset.section || "";
+      const active = state.view === "dashboard"
+        ? view === "dashboard" && section === state.section
+        : view === state.view && !section;
+      item.classList.toggle("active", active);
     });
+    syncModeButtons();
     if (state.view === "dashboard" && state.section) {
       requestAnimationFrame(() => {
         const target = $(state.section);
-        if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (target) target.scrollIntoView({ behavior: "auto", block: "start" });
       });
     } else {
-      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "smooth" }));
+      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
     }
   }
 
   function bindNav() {
-    document.querySelectorAll(".nav-item").forEach((button) => {
+    document.querySelectorAll(".nav-item, .mobile-nav-item, .mobile-menu-item").forEach((button) => {
+      if (!button.dataset.view) return;
       button.addEventListener("click", () => {
         state.view = button.dataset.view || "dashboard";
         if (state.view === "dashboard") {
-          state.section = button.dataset.section || "leadersSection";
-          state.activeDashboardNav = button.querySelector("span:last-child")?.textContent || "龙头天梯";
+          state.section = button.dataset.section || "overviewSection";
+          state.activeDashboardNav = button.textContent.trim();
+          state.mode = sectionModes[state.section] || "overview";
         }
+        if ($("mobileMoreMenu")) $("mobileMoreMenu").hidden = true;
         renderViews();
+        renderCurrentViewData();
       });
     });
   }
@@ -1145,8 +1657,12 @@
   function bindModes() {
     document.querySelectorAll(".mode").forEach((button) => {
       button.addEventListener("click", () => {
-        state.mode = button.dataset.mode || "day";
-        document.querySelectorAll(".mode").forEach((item) => item.classList.toggle("active", item === button));
+        state.mode = button.dataset.mode || "overview";
+        const target = modeSections[state.mode] || modeSections.overview;
+        state.view = "dashboard";
+        state.section = target.section;
+        state.activeDashboardNav = target.nav;
+        renderViews();
       });
     });
   }
@@ -1156,6 +1672,7 @@
     if (!input) return;
     input.addEventListener("input", () => {
       state.factorSearch = input.value || "";
+      state.factorLimit = 24;
       renderFactorMetrics();
       renderFactorCatalog();
     });
@@ -1182,20 +1699,79 @@
     });
   }
 
+  function bindGlobalSearch() {
+    const input = $("globalSearch");
+    const results = $("globalSearchResults");
+    if (!input || !results) return;
+    input.addEventListener("input", () => {
+      const keyword = input.value.trim().toLowerCase();
+      state.globalSearch = keyword;
+      if (!keyword) {
+        results.hidden = true;
+        results.innerHTML = "";
+        return;
+      }
+      const matches = (data.leaders || []).filter((leader) => [leader.name, leader.code, leader.board_path].join(" ").toLowerCase().includes(keyword)).slice(0, 8);
+      results.hidden = false;
+      results.innerHTML = matches.length ? matches.map((leader) => `<button type="button" data-search-code="${escapeHtml(leader.code)}"><span><strong>${escapeHtml(leader.name)}</strong><small>${escapeHtml(normalizeCode(leader.code))} · ${escapeHtml(boardLabel(leader.board_path))}</small></span><b>${num(leader.combined_score, 1)}</b></button>`).join("") : `<div class="search-empty">没有找到匹配股票</div>`;
+      results.querySelectorAll("[data-search-code]").forEach((button) => {
+        button.addEventListener("click", () => {
+          state.leaderCode = button.dataset.searchCode;
+          state.view = "dashboard";
+          state.section = "leadersSection";
+          state.mode = "overview";
+          state.activeDashboardNav = "龙头观察";
+          input.value = "";
+          results.hidden = true;
+          renderDashboard();
+          renderViews();
+        });
+      });
+    });
+    document.addEventListener("click", (event) => {
+      if (!event.target.closest(".global-search-wrap")) results.hidden = true;
+    });
+  }
+
+  function bindShellControls() {
+    $("sidebarToggle")?.addEventListener("click", () => {
+      document.body.classList.toggle("sidebar-collapsed");
+    });
+    $("mobileMore")?.addEventListener("click", () => {
+      const menu = $("mobileMoreMenu");
+      menu.hidden = !menu.hidden;
+    });
+  }
+
   function render() {
+    renderDashboard();
+    renderViews();
+    renderCurrentViewData();
+  }
+
+  function renderDashboard() {
     renderGeneratedAt();
+    renderMarketBrief();
     renderMetrics();
     renderBoardChips();
     renderLeaderLadder();
     renderLeaderDetail();
     renderSectorTrends();
     renderSignalTable();
-    renderFactors();
-    renderReview();
-    renderMerge();
-    renderDailyAnalysis();
-    renderViews();
-    loadDailyAnalysis();
+    renderWatchCount();
+  }
+
+  function renderCurrentViewData() {
+    if (state.view === "analysis") {
+      renderDailyAnalysis();
+      loadDailyAnalysis();
+    } else if (state.view === "factor") {
+      renderFactors();
+    } else if (state.view === "review") {
+      renderReview();
+    } else if (state.view === "watchlist") {
+      renderWatchlist();
+    }
   }
 
   bindNav();
@@ -1203,5 +1779,10 @@
   bindFactorSearch();
   bindSignalSearch();
   bindBoardWindows();
+  bindGlobalSearch();
+  bindShellControls();
+  bindAuth();
+  renderAuth();
   render();
+  loadAuthState();
 })();

@@ -25,6 +25,9 @@ yarn-error.log*
 data/sector_rotation/cache/
 data/sector_rotation/daily_runs/
 data/sector_rotation/ai_analysis/
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
 *.log
 
 # Keep latest data snapshots in git; ignore timestamped historical runs.
