@@ -1487,12 +1487,13 @@
   }
 
   function factorGroup(item) {
-    const text = [item.name, item.category, item.meaning, item.formula, item.family].join(" ").toLowerCase();
-    if (/k线|形态|反包|影线|实体|偏移|支撑|背离|反转/.test(text)) return "K线形态";
+    const formula = item.project === "qlib" ? item.formula : "";
+    const text = [item.name, item.category, item.meaning, formula, item.family].join(" ").toLowerCase();
+    if (/k线|形态|反包|影线|十字星|实体|偏移|支撑|背离|反转/.test(text)) return "K线形态";
     if (/波动|风险|std|振幅|回撤|volatility/.test(text)) return "波动风险";
     if (/趋势|均线|ma|slope|beta|突破|多头|空头/.test(text)) return "趋势";
     if (/动量|momentum|roc|涨跌|收益/.test(text)) return "动量";
-    if (/量|volume|资金|成交/.test(text)) return "成交量";
+    if (/量|volume|资金|成交|换手/.test(text)) return "成交量";
     if (/热度|人气|排名|rank|关注/.test(text)) return "市场热度";
     return "其他";
   }
@@ -1516,7 +1517,10 @@
       ["波动风险", leader.qlib_volatility_rank, "波动越可控，分数越高"],
       ["市场热度", leader.popularity_score, "东方财富人气排名转化的热度"],
     ] : [];
-    $("factorGeneratedAt").textContent = `${factorCatalog.generatedAt || "--"} · 公式默认折叠`;
+    const formulaCount = Number(stats.formulaCount || 0);
+    const formulaTotal = Number(stats.total || 0);
+    const unimplemented = Number(stats.unimplementedCount || 0);
+    $("factorGeneratedAt").textContent = `${factorCatalog.generatedAt || "--"} · 计算说明 ${formulaCount}/${formulaTotal}${unimplemented ? ` · ${unimplemented} 项待实现` : ""}`;
     $("factorTotal").textContent = `当前 ${factorItems().length}/${stats.total || 0}`;
     $("factorInsights").innerHTML = leader ? `
       <div class="factor-stock-summary">
@@ -1569,13 +1573,16 @@
   }
 
   function renderFactorNotes() {
-    $("factorNotes").innerHTML = `<div class="factor-note"><strong>怎么看：</strong>先看上方五个维度，再按主题查具体因子；公式只是计算依据，不是操作建议。</div>`;
+    $("factorNotes").innerHTML = `<div class="factor-note"><strong>公式标记：</strong>t 为最新交易日，t-1 为前一交易日，Valid 表示数据非空；计算条件来自当前源码，不构成操作建议。</div>`;
   }
 
   function factorRow(item) {
     const score = item.score === "" || item.score === null || item.score === undefined ? "--" : item.score;
     const params = item.parameters ? `参数 ${item.parameters}` : "无额外参数";
-    const status = Number(score) > 0 ? "偏多" : Number(score) < 0 ? "偏空" : "解释项";
+    const formula = String(item.formula || "未提供计算说明").replaceAll(" AND ", "\nAND ").replaceAll("；", "；\n");
+    const isUnimplemented = String(item.formula || "").startsWith("当前源码未实现");
+    const status = isUnimplemented ? "待实现" : Number(score) > 0 ? "偏多" : Number(score) < 0 ? "偏空" : "解释项";
+    const methodNote = item.notes ? `<p class="factor-method-note">${escapeHtml(item.notes)}</p>` : "";
     return `
       <div class="factor-row">
         <div class="factor-name">
@@ -1583,8 +1590,8 @@
           <span>${escapeHtml(factorGroup(item))} · ${escapeHtml(projectLabel(item.project))}</span>
         </div>
         <div class="factor-meaning"><span>它代表什么</span><p>${escapeHtml(item.meaning || "暂无通俗解释")}</p></div>
-        <span class="factor-status">${escapeHtml(status)}</span>
-        <details class="factor-method"><summary>查看计算方法</summary><div><code>${escapeHtml(item.formula || "未提供公式")}</code><p>${escapeHtml(params)} · 来源 ${escapeHtml(item.source_file || item.family || "--")}</p></div></details>
+        <span class="factor-status${isUnimplemented ? " pending" : ""}">${escapeHtml(status)}</span>
+        <details class="factor-method${isUnimplemented ? " is-unimplemented" : ""}"><summary>查看计算方法</summary><div><span class="factor-method-label">触发条件</span><code>${escapeHtml(formula)}</code><p>${escapeHtml(params)} · 来源 ${escapeHtml(item.source_file || item.family || "--")}</p>${methodNote}</div></details>
       </div>
     `;
   }

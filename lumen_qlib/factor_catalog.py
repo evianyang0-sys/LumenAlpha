@@ -91,6 +91,35 @@ LOCAL_QLIB_ADAPTERS = [
     ("volatility_20d", "20日波动", "Std(close.pct_change(), 20)", "近20日收益率波动，用作风险惩罚项。"),
 ]
 
+ADVANCED_SIGNAL_FORMULAS = {
+    "信号_弱转强": "存在 j∈[t-5,t-1]：Close[j]/Close[j-1]-1 > 9.5%，且 Volume[t] < 0.7×Mean(Volume[j+1:t])，Close[t] > Low[j]，Volume[t] > 1.5×VOL_MA5[t]",
+    "信号_缩量企稳MA5": "Volume[t-k] < 0.7×VOL_MA5[t-k]（k=0,1,2），且 |Close[t]-MA5[t]|/MA5[t] < 2%",
+    "信号_缩量企稳MA10": "Volume[t-k] < 0.7×VOL_MA5[t-k]（k=0,1,2），且 |Close[t]-MA10[t]|/MA10[t] < 2%",
+    "信号_缩量企稳MA20": "Volume[t-k] < 0.7×VOL_MA5[t-k]（k=0,1,2），且 |Close[t]-MA20[t]|/MA20[t] < 2%",
+    "信号_N型反包": "当前源码未实现：N型反包列仅初始化为 False，尚无触发条件。",
+    "信号_突破20日新高": "Close[t] > Max(Close[t-20:t-1]) AND Volume[t] > 1.3×VOL_MA5[t]",
+    "信号_突破60日新高": "Close[t] > Max(Close[t-60:t-1]) AND Volume[t] > 1.5×VOL_MA5[t]",
+    "信号_均线发散": "MA5[t] > 1.02×MA20[t]（MA5、MA10、MA20 均存在）",
+    "信号_量价齐升": "Close[t] > Close[t-1] > Close[t-2] > Close[t-3] AND Volume[t] > VOL_MA5[t] AND Volume[t] > 1.2×Volume[t-1]",
+    "信号_放量站上MA20": "Close[t] > MA20[t] AND Volume[t] > 1.5×VOL_MA5[t] AND Close[t-1] < MA20[t-1]",
+    "信号_资金连续净流入": "连续 k=0,1,2 均满足：Volume[t-k] > 1.5×VOL_MA20[t-k] AND Close[t-k] > Close[t-k-1]",
+    "信号_换手率突增": "TurnoverEst[t] > 2×TurnoverEst[t-1]；TurnoverEst = Volume/(Close×1,000,000)×100",
+    "信号_高换手率主力流入": "TurnoverEst[t] > 10 AND Volume[t] > 1.5×VOL_MA20[t] AND Close[t] > Close[t-1]",
+    "信号_均线多头排列": "MA5[t] > MA10[t] > MA20[t]",
+    "信号_仙人指路": "Body=|Close[t]-Close[t-1]|；Upper=High[t]-Max(Close[t],Close[t-1])；Body > 0 AND Upper > 2×Body",
+    "信号_早晨之星": "Close[t-2] < Close[t-3] AND |Close[t-1]-Close[t-2]| < 0.5×|Close[t-2]-Close[t-3]| AND Close[t] > (Close[t-2]+Close[t-3])/2",
+    "信号_突破盘整": "(Max(High[t-30:t-1])-Min(Low[t-30:t-1]))/Min(Low[t-30:t-1]) < 15% AND Close[t] > Max(High[t-30:t-1]) AND Volume[t] > 1.5×VOL_MA5[t]",
+    "信号_严重超跌": "Close[t]/Close[t-10]-1 < -20%",
+    "信号_RSI极度超卖": "RSI[t] < 20",
+    "信号_KDJ极度超卖": "K[t] < 10",
+    "信号_黄金坑": "|Close[t]-Min(Low[t-30:t-1])|/Min(Low[t-30:t-1]) < 5% AND Volume[t] < 0.7×VOL_MA5[t]",
+    "信号_缩量十字星": "Body=|Close[t]-Close[t-1]|；Upper=High[t]-Max(Close[t],Close[t-1])；Lower=Min(Close[t],Close[t-1])-Low[t]；0 < Body < 0.2×(Upper+Lower) AND Volume[t] < 0.5×VOL_MA5[t]",
+    "信号_均线空头排列": "MA5[t] < MA10[t] < MA20[t]",
+    "信号_主力资金流出": "Volume[t] > 1.5×VOL_MA20[t] AND Close[t] < Close[t-1]",
+}
+
+SIGNAL_FORMULA_PARAMETERS = "t=最新交易日；t-1=前一交易日；Valid=非空检查"
+
 
 def prefix_name(name: str) -> str:
     return re.sub(r"\d+$", "", name)
@@ -129,12 +158,28 @@ def row(
     }
 
 
-def build_qlib_catalog() -> list[dict[str, Any]]:
-    from qlib.contrib.data.loader import Alpha158DL, Alpha360DL  # type: ignore
+def qlib_feature_config(class_name: str) -> tuple[list[str], list[str]]:
+    loader_path = QLIB_PATH / "qlib" / "contrib" / "data" / "loader.py"
+    tree = ast.parse(loader_path.read_text(encoding="utf-8"))
+    class_node = next(
+        node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == class_name
+    )
+    function = next(
+        node
+        for node in class_node.body
+        if isinstance(node, ast.FunctionDef) and node.name == "get_feature_config"
+    )
+    function.decorator_list = []
+    namespace: dict[str, Any] = {}
+    module = ast.fix_missing_locations(ast.Module(body=[function], type_ignores=[]))
+    exec(compile(module, str(loader_path), "exec"), namespace)
+    return namespace["get_feature_config"]()
 
+
+def build_qlib_catalog() -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
 
-    fields, names = Alpha158DL.get_feature_config()
+    fields, names = qlib_feature_config("Alpha158DL")
     for name, formula in zip(names, fields):
         prefix = prefix_name(name)
         label, meaning = QLIB_ALPHA158_MEANINGS.get(prefix, (prefix, "qlib Alpha158 标准特征。"))
@@ -152,7 +197,7 @@ def build_qlib_catalog() -> list[dict[str, Any]]:
             )
         )
 
-    fields, names = Alpha360DL.get_feature_config()
+    fields, names = qlib_feature_config("Alpha360DL")
     for name, formula in zip(names, fields):
         prefix = prefix_name(name)
         label, meaning = QLIB_ALPHA360_MEANINGS.get(prefix, (prefix, "qlib Alpha360 标准序列特征。"))
@@ -207,11 +252,71 @@ def static_eval(node: ast.AST) -> Any:
         return None
 
 
+def humanize_signal_formula(formula: str) -> str:
+    for frame, offset in (("curr", "t"), ("prev", "t-1")):
+        formula = re.sub(
+            rf"{frame}\.get\('([^']+)', float\('inf'\)\)",
+            lambda match: f"{match.group(1)}[{offset}]",
+            formula,
+        )
+        formula = re.sub(
+            rf"{frame}\.get\('([^']+)'\)",
+            lambda match: f"{match.group(1)}[{offset}]",
+            formula,
+        )
+        formula = re.sub(
+            rf"{frame}\['([^']+)'\]",
+            lambda match: f"{match.group(1)}[{offset}]",
+            formula,
+        )
+
+    replacements = {
+        "收盘[": "Close[",
+        "开盘[": "Open[",
+        "最高[": "High[",
+        "最低[": "Low[",
+        "成交量[": "Volume[",
+        "len(self.df)": "HistoryLength",
+        "prev_ema20": "EMA20[t-1]",
+        "prev_ema50": "EMA50[t-1]",
+        "prev_k": "K[t-1]",
+        "prev_d": "D[t-1]",
+        "min_price_20": "Min(Close,20)[t]",
+        "min_bbd_20": "Min(BBD,20)[t]",
+        "fib_0382": "FIB_0382[t]",
+        "fib_0618": "FIB_0618[t]",
+        "price": "Close[t]",
+    }
+    formula = formula.replace("pd.notna", "Valid")
+    for source, display in replacements.items():
+        formula = formula.replace(source, display)
+    for source, display in (("and", "AND"), ("or", "OR"), ("not", "NOT")):
+        formula = re.sub(rf"\b{source}\b", display, formula)
+    return formula
+
+
+def enclosing_condition(call: ast.Call, func: ast.FunctionDef, parents: dict[ast.AST, ast.AST]) -> str:
+    conditions = []
+    node: ast.AST = call
+    while node is not func:
+        parent = parents.get(node)
+        if parent is None:
+            break
+        if isinstance(parent, ast.If):
+            condition = ast.unparse(parent.test)
+            if any(node is branch for branch in parent.orelse):
+                condition = f"not ({condition})"
+            conditions.append(condition)
+        node = parent
+    return humanize_signal_formula(" AND ".join(reversed(conditions)))
+
+
 def extract_dict_appends(path: Path, target_names: set[str]) -> list[dict[str, Any]]:
     tree = ast.parse(path.read_text(encoding="utf-8"))
     items = []
     for class_node in [n for n in tree.body if isinstance(n, ast.ClassDef)]:
         for func in [n for n in class_node.body if isinstance(n, ast.FunctionDef) and n.name in target_names]:
+            parents = {child: parent for parent in ast.walk(func) for child in ast.iter_child_nodes(parent)}
             for call in ast.walk(func):
                 if not isinstance(call, ast.Call):
                     continue
@@ -220,6 +325,7 @@ def extract_dict_appends(path: Path, target_names: set[str]) -> list[dict[str, A
                 value = static_eval(call.args[0])
                 if isinstance(value, dict) and "name" in value:
                     value["_function"] = func.name
+                    value["_formula"] = enclosing_condition(call, func, parents)
                     items.append(value)
     return items
 
@@ -260,6 +366,8 @@ def build_lumen_catalog() -> list[dict[str, Any]]:
                 item.get("name", ""),
                 item.get("combo_category") or item.get("category", ""),
                 item.get("description", ""),
+                formula=item.get("_formula", ""),
+                parameters=SIGNAL_FORMULA_PARAMETERS,
                 direction=item.get("type", ""),
                 score=score,
                 source_file="LumenAlpha/stock_analyzer_project/indicators.py",
@@ -304,6 +412,8 @@ def build_lumen_catalog() -> list[dict[str, Any]]:
                 display,
                 cfg.get("category", ""),
                 advanced_descriptions.get(name) or tuple_desc.get(name, ""),
+                formula=ADVANCED_SIGNAL_FORMULAS.get(name, ""),
+                parameters=SIGNAL_FORMULA_PARAMETERS,
                 direction=cfg.get("type", ""),
                 score=cfg.get("weight", ""),
                 source_file="LumenAlpha/stock_analyzer_project/advanced_signals.py",
@@ -329,15 +439,21 @@ def build_payload(items: list[dict[str, Any]]) -> dict[str, Any]:
     by_project = Counter(item["project"] for item in items)
     by_family = Counter(item["family"] for item in items)
     by_category = Counter(item["category"] for item in items)
+    formula_count = sum(bool(str(item.get("formula", "")).strip()) for item in items)
+    unimplemented_count = sum(str(item.get("formula", "")).startswith("当前源码未实现") for item in items)
     return {
         "generatedAt": datetime.now().isoformat(timespec="seconds"),
         "notes": [
             "qlib 目录包含标准 Alpha158/Alpha360 特征族；qlib 也支持任意表达式，因此这里枚举的是本项目可直接程序化展开的标准输出。",
             "LumenAlpha 目录包含基础技术指标、普通信号、组合信号、高级形态信号和综合评分。",
             "LABEL0 是训练标签，不应作为实盘当期因子使用。",
+            "公式中 t 表示最新交易日，t-1 表示前一交易日，Valid 表示数据非空。",
         ],
         "stats": {
             "total": len(items),
+            "formulaCount": formula_count,
+            "missingFormulaCount": len(items) - formula_count,
+            "unimplementedCount": unimplemented_count,
             "byProject": dict(sorted(by_project.items())),
             "byFamily": dict(sorted(by_family.items())),
             "topCategories": dict(by_category.most_common(20)),

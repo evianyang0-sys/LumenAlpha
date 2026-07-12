@@ -2010,20 +2010,50 @@ summary {
   font-size: 10px;
 }
 
+.factor-status.pending {
+  color: #8a4b0f;
+  background: #fffaeb;
+}
+
+.factor-method[open] {
+  grid-column: 1 / -1;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.factor-method[open] summary {
+  color: #174ea6;
+  font-weight: 600;
+}
+
 .factor-method div {
   min-width: 0;
   margin-top: 7px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--surface-soft);
+}
+
+.factor-method-label {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .factor-method code {
   display: block;
-  max-height: 70px;
-  overflow: auto;
+  max-height: 180px;
+  overflow-x: hidden;
+  overflow-y: auto;
   overflow-wrap: anywhere;
   color: #344054;
   font-family: "SFMono-Regular", Consolas, monospace;
-  font-size: 10px;
-  line-height: 1.45;
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre-wrap;
 }
 
 .factor-method p {
@@ -2031,6 +2061,19 @@ summary {
   overflow-wrap: anywhere;
   color: var(--muted);
   font-size: 10px;
+}
+
+.factor-method .factor-method-note {
+  color: #475467;
+}
+
+.factor-method.is-unimplemented div {
+  border-color: #f4c777;
+  background: #fffaeb;
+}
+
+.factor-method.is-unimplemented code {
+  color: #8a4b0f;
 }
 
 .load-more {

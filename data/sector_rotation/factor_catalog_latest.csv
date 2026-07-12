@@ -1,28 +1,28 @@
 ﻿project,family,name,category,meaning,formula,parameters,direction,score,source_file,notes
-LumenAlpha,AdvancedSignalGenerator,N型反包,弱转强,涨停后缩量回调再反包。,,,buy,2.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,弱转强,弱转强,龙头股调整后转强。,,,buy,3.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,缩量企稳MA10,弱转强,缩量企稳在 MA10 均线。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,缩量企稳MA20,弱转强,缩量企稳在 MA20 均线。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,缩量企稳MA5,弱转强,缩量企稳在 MA5 均线。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,仙人指路,技术形态,上影线试盘可能启动。,,,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,均线多头排列,技术形态,短期均线>中期均线>长期均线。,,,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,均线空头排列,技术形态,均线向下发散。,,,sell,-1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,早晨之星,技术形态,反转形态看涨。,,,buy,2.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,突破盘整,技术形态,盘整后放量突破。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,主力资金流出,资金面,主力资金净流出。,,,sell,-1.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,换手率突增,资金面,换手率大幅增加关注。,,,neutral,1.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,资金连续净流入,资金面,主力资金连续3天流入。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,高换手率主力流入,资金面,高换手且主力资金流入。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,KDJ极度超卖,超跌反弹,KDJ<10 极度超卖。,,,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,RSI极度超卖,超跌反弹,RSI<20 极度超卖。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,严重超跌,超跌反弹,短期大幅下跌可能反弹。,,,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,缩量十字星,超跌反弹,变盘信号关注。,,,neutral,1.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,黄金坑,超跌反弹,挖坑后缩量回升。,,,buy,2.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,均线发散,趋势启动,均线向上发散开启涨势。,,,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,放量站上MA20,趋势启动,放量突破20日均线。,,,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,突破20日新高,趋势启动,放量突破20日高点。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,突破60日新高,趋势启动,放量突破60日高点。,,,buy,2.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
-LumenAlpha,AdvancedSignalGenerator,量价齐升,趋势启动,放量上涨量价配合。,,,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,N型反包,弱转强,涨停后缩量回调再反包。,当前源码未实现：N型反包列仅初始化为 False，尚无触发条件。,t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,弱转强,弱转强,龙头股调整后转强。,"存在 j∈[t-5,t-1]：Close[j]/Close[j-1]-1 > 9.5%，且 Volume[t] < 0.7×Mean(Volume[j+1:t])，Close[t] > Low[j]，Volume[t] > 1.5×VOL_MA5[t]",t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,3.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,缩量企稳MA10,弱转强,缩量企稳在 MA10 均线。,"Volume[t-k] < 0.7×VOL_MA5[t-k]（k=0,1,2），且 |Close[t]-MA10[t]|/MA10[t] < 2%",t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,缩量企稳MA20,弱转强,缩量企稳在 MA20 均线。,"Volume[t-k] < 0.7×VOL_MA5[t-k]（k=0,1,2），且 |Close[t]-MA20[t]|/MA20[t] < 2%",t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,缩量企稳MA5,弱转强,缩量企稳在 MA5 均线。,"Volume[t-k] < 0.7×VOL_MA5[t-k]（k=0,1,2），且 |Close[t]-MA5[t]|/MA5[t] < 2%",t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,仙人指路,技术形态,上影线试盘可能启动。,"Body=|Close[t]-Close[t-1]|；Upper=High[t]-Max(Close[t],Close[t-1])；Body > 0 AND Upper > 2×Body",t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,均线多头排列,技术形态,短期均线>中期均线>长期均线。,MA5[t] > MA10[t] > MA20[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,均线空头排列,技术形态,均线向下发散。,MA5[t] < MA10[t] < MA20[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,sell,-1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,早晨之星,技术形态,反转形态看涨。,Close[t-2] < Close[t-3] AND |Close[t-1]-Close[t-2]| < 0.5×|Close[t-2]-Close[t-3]| AND Close[t] > (Close[t-2]+Close[t-3])/2,t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,突破盘整,技术形态,盘整后放量突破。,(Max(High[t-30:t-1])-Min(Low[t-30:t-1]))/Min(Low[t-30:t-1]) < 15% AND Close[t] > Max(High[t-30:t-1]) AND Volume[t] > 1.5×VOL_MA5[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,主力资金流出,资金面,主力资金净流出。,Volume[t] > 1.5×VOL_MA20[t] AND Close[t] < Close[t-1],t=最新交易日；t-1=前一交易日；Valid=非空检查,sell,-1.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,换手率突增,资金面,换手率大幅增加关注。,"TurnoverEst[t] > 2×TurnoverEst[t-1]；TurnoverEst = Volume/(Close×1,000,000)×100",t=最新交易日；t-1=前一交易日；Valid=非空检查,neutral,1.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,资金连续净流入,资金面,主力资金连续3天流入。,"连续 k=0,1,2 均满足：Volume[t-k] > 1.5×VOL_MA20[t-k] AND Close[t-k] > Close[t-k-1]",t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,高换手率主力流入,资金面,高换手且主力资金流入。,TurnoverEst[t] > 10 AND Volume[t] > 1.5×VOL_MA20[t] AND Close[t] > Close[t-1],t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,KDJ极度超卖,超跌反弹,KDJ<10 极度超卖。,K[t] < 10,t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,RSI极度超卖,超跌反弹,RSI<20 极度超卖。,RSI[t] < 20,t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,严重超跌,超跌反弹,短期大幅下跌可能反弹。,Close[t]/Close[t-10]-1 < -20%,t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,缩量十字星,超跌反弹,变盘信号关注。,"Body=|Close[t]-Close[t-1]|；Upper=High[t]-Max(Close[t],Close[t-1])；Lower=Min(Close[t],Close[t-1])-Low[t]；0 < Body < 0.2×(Upper+Lower) AND Volume[t] < 0.5×VOL_MA5[t]",t=最新交易日；t-1=前一交易日；Valid=非空检查,neutral,1.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,黄金坑,超跌反弹,挖坑后缩量回升。,|Close[t]-Min(Low[t-30:t-1])|/Min(Low[t-30:t-1]) < 5% AND Volume[t] < 0.7×VOL_MA5[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,均线发散,趋势启动,均线向上发散开启涨势。,MA5[t] > 1.02×MA20[t]（MA5、MA10、MA20 均存在）,t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,放量站上MA20,趋势启动,放量突破20日均线。,Close[t] > MA20[t] AND Volume[t] > 1.5×VOL_MA5[t] AND Close[t-1] < MA20[t-1],t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,1.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,突破20日新高,趋势启动,放量突破20日高点。,Close[t] > Max(Close[t-20:t-1]) AND Volume[t] > 1.3×VOL_MA5[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,突破60日新高,趋势启动,放量突破60日高点。,Close[t] > Max(Close[t-60:t-1]) AND Volume[t] > 1.5×VOL_MA5[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.5,LumenAlpha/stock_analyzer_project/advanced_signals.py,
+LumenAlpha,AdvancedSignalGenerator,量价齐升,趋势启动,放量上涨量价配合。,Close[t] > Close[t-1] > Close[t-2] > Close[t-3] AND Volume[t] > VOL_MA5[t] AND Volume[t] > 1.2×Volume[t-1],t=最新交易日；t-1=前一交易日；Valid=非空检查,buy,2.0,LumenAlpha/stock_analyzer_project/advanced_signals.py,
 LumenAlpha,BaseIndicator,AO,基础技术指标,"SMA((high + low) / 2, 5) - SMA((high + low) / 2, 34)","SMA((high + low) / 2, 5) - SMA((high + low) / 2, 34)","5, 34",,,LumenAlpha/stock_analyzer_project/indicator_engine.py,Bill Williams Awesome Oscillator
 LumenAlpha,BaseIndicator,ATR,基础技术指标,"WilderAverage(true range, 14)","WilderAverage(true range, 14)",14,,,LumenAlpha/stock_analyzer_project/indicator_engine.py,J. Welles Wilder ATR
 LumenAlpha,BaseIndicator,BBD,基础技术指标,"(AO - SMA(AO, 3)) * 100","(AO - SMA(AO, 3)) * 100",3,,,LumenAlpha/stock_analyzer_project/indicator_engine.py,project-defined momentum derivative; not exchange fund-flow data
@@ -34,53 +34,53 @@ LumenAlpha,BaseIndicator,MA,基础技术指标,N-day simple moving average of cl
 LumenAlpha,BaseIndicator,MACD,基础技术指标,"DIF=EMA12-EMA26; DEA=EMA(DIF,9); MACD=2*(DIF-DEA)","DIF=EMA12-EMA26; DEA=EMA(DIF,9); MACD=2*(DIF-DEA)","12, 26, 9",,,LumenAlpha/stock_analyzer_project/indicator_engine.py,standard MACD with mainland-China histogram scaling
 LumenAlpha,BaseIndicator,RSI,基础技术指标,100 - 100/(1 + WilderAverage(gain)/WilderAverage(loss)),100 - 100/(1 + WilderAverage(gain)/WilderAverage(loss)),14,,,LumenAlpha/stock_analyzer_project/indicator_engine.py,J. Welles Wilder RSI
 LumenAlpha,BaseIndicator,VWAP,基础技术指标,cumulative(typical price * volume) / cumulative(volume),cumulative(typical price * volume) / cumulative(volume),full supplied daily series,,,LumenAlpha/stock_analyzer_project/indicator_engine.py,daily cumulative VWAP proxy; not intraday session VWAP
-LumenAlpha,ComboSignal,动能金叉+RSI超卖,动量共振,【共振信号】动量转强+超卖！动能金叉且RSI超卖,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 70%。
-LumenAlpha,ComboSignal,VWAP上方+价格站上EMA200,双重确认,【共振信号】双重确认强势！机构和长期资金看好,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 65%。
-LumenAlpha,ComboSignal,斐波那契底部+CCI超卖,支撑共振,【强共振】斐波那契支撑+CCI超卖！技术支撑强烈,,,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 69%。
-LumenAlpha,ComboSignal,斐波那契底部+KDJ超卖,支撑共振,【共振信号】斐波那契支撑+KDJ超卖！反弹概率高,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 64%。
-LumenAlpha,ComboSignal,价格站上EMA200+KDJ金叉,突破共振,【共振信号】长期突破+KDJ金叉！趋势确认,,,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 66%。
-LumenAlpha,ComboSignal,底背离+RSI超卖,背离共振,【共振信号】底背离+超卖！双重反转信号,,,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 68%。
-LumenAlpha,ComboSignal,CCI区域+KDJ超卖,超跌共振,【共振信号】CCI进入超卖区+KDJ超卖,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 71%。
-LumenAlpha,ComboSignal,CCI超卖+EMA多头排列,超跌共振,【共振信号】超卖+趋势向上！回调后反弹概率大,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 67%。
-LumenAlpha,ComboSignal,CCI超卖+KDJ超卖,超跌共振,【强共振】双超卖叠加！CCI和KDJ同时严重超卖,,,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 71%。
-LumenAlpha,ComboSignal,KDJ金叉+CCI超卖,超跌共振,【强共振】KDJ金叉+CCI严重超卖！反弹确定性最高,,,bullish,3.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 74%。
-LumenAlpha,ComboSignal,RSI严重超卖+KDJ深度超卖,超跌共振,【共振信号】极度超跌！RSI<20且KDJ<20，反弹概率极高,,,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 100%。
-LumenAlpha,ComboSignal,RSI超卖+KDJ超卖,超跌共振,【共振信号】双超卖叠加！RSI和KDJ同时超卖,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 75%。
-LumenAlpha,ComboSignal,EMA多头排列+KDJ金叉,趋势共振,【共振信号】趋势向上+KDJ金叉！中线强势,,,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 69%。
-LumenAlpha,ComboSignal,MACD金叉+RSI超卖,趋势共振,【共振信号】趋势启动+超卖！MACD金叉且RSI超卖,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 73%。
-LumenAlpha,ComboSignal,VWAP上方+EMA多头排列,趋势共振,【共振信号】机构强势+均线多头！中线持有信号,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 65%。
-LumenAlpha,ComboSignal,多头排列+MACD红柱,趋势共振,【共振信号】趋势延续！多头排列且MACD红柱,,,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 65%。
+LumenAlpha,ComboSignal,动能金叉+RSI超卖,动量共振,【共振信号】动量转强+超卖！动能金叉且RSI超卖,Valid(动能线[t]) AND Valid(动能线[t-1]) AND 动能线[t] > 动能辅线[t] AND 动能线[t-1] <= 动能辅线[t-1] AND Valid(RSI[t]) AND RSI[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 70%。
+LumenAlpha,ComboSignal,VWAP上方+价格站上EMA200,双重确认,【共振信号】双重确认强势！机构和长期资金看好,Valid(VWAP[t]) AND Valid(EMA200[t]) AND Close[t] > VWAP[t] AND Close[t] > EMA200[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 65%。
+LumenAlpha,ComboSignal,斐波那契底部+CCI超卖,支撑共振,【强共振】斐波那契支撑+CCI超卖！技术支撑强烈,Valid(FIB_0382[t]) AND Valid(CCI[t]) AND Close[t] < FIB_0382[t] AND CCI[t] < -100,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 69%。
+LumenAlpha,ComboSignal,斐波那契底部+KDJ超卖,支撑共振,【共振信号】斐波那契支撑+KDJ超卖！反弹概率高,Valid(FIB_0382[t]) AND Valid(K[t]) AND Close[t] < FIB_0382[t] AND K[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 64%。
+LumenAlpha,ComboSignal,价格站上EMA200+KDJ金叉,突破共振,【共振信号】长期突破+KDJ金叉！趋势确认,Valid(EMA200[t]) AND Valid(K[t]) AND Close[t] > EMA200[t] AND K[t] > D[t] AND (K[t-1] <= D[t]),t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 66%。
+LumenAlpha,ComboSignal,底背离+RSI超卖,背离共振,【共振信号】底背离+超卖！双重反转信号,"Valid(BBD[t]) AND HistoryLength >= 20 AND Close[t] == Min(Close,20)[t] AND BBD[t] > Min(BBD,20)[t] AND Valid(RSI[t]) AND RSI[t] < 30",t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 68%。
+LumenAlpha,ComboSignal,CCI区域+KDJ超卖,超跌共振,【共振信号】CCI进入超卖区+KDJ超卖,Valid(CCI[t]) AND Valid(K[t]) AND CCI[t] < -50 AND K[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 71%。
+LumenAlpha,ComboSignal,CCI超卖+EMA多头排列,超跌共振,【共振信号】超卖+趋势向上！回调后反弹概率大,Valid(CCI[t]) AND Valid(EMA20[t]) AND CCI[t] < -100 AND EMA20[t] > EMA50[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 67%。
+LumenAlpha,ComboSignal,CCI超卖+KDJ超卖,超跌共振,【强共振】双超卖叠加！CCI和KDJ同时严重超卖,Valid(CCI[t]) AND Valid(K[t]) AND CCI[t] < -100 AND K[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 71%。
+LumenAlpha,ComboSignal,KDJ金叉+CCI超卖,超跌共振,【强共振】KDJ金叉+CCI严重超卖！反弹确定性最高,Valid(K[t]) AND Valid(D[t]) AND Valid(CCI[t]) AND K[t] > D[t] AND K[t-1] <= D[t-1] AND CCI[t] < -100,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,3.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 74%。
+LumenAlpha,ComboSignal,RSI严重超卖+KDJ深度超卖,超跌共振,【共振信号】极度超跌！RSI<20且KDJ<20，反弹概率极高,Valid(RSI[t]) AND Valid(K[t]) AND RSI[t] < 20 AND K[t] < 20,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 100%。
+LumenAlpha,ComboSignal,RSI超卖+KDJ超卖,超跌共振,【共振信号】双超卖叠加！RSI和KDJ同时超卖,Valid(RSI[t]) AND Valid(K[t]) AND RSI[t] < 30 AND K[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 75%。
+LumenAlpha,ComboSignal,EMA多头排列+KDJ金叉,趋势共振,【共振信号】趋势向上+KDJ金叉！中线强势,Valid(EMA20[t]) AND Valid(EMA50[t]) AND Valid(K[t]) AND EMA20[t] > EMA50[t] AND EMA50[t] > EMA200[t] AND K[t] > D[t] AND K[t-1] <= D[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,3.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 69%。
+LumenAlpha,ComboSignal,MACD金叉+RSI超卖,趋势共振,【共振信号】趋势启动+超卖！MACD金叉且RSI超卖,Valid(DIF[t]) AND Valid(DEA[t]) AND DIF[t] > DEA[t] AND DIF[t-1] <= DEA[t-1] AND Valid(RSI[t]) AND RSI[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 73%。
+LumenAlpha,ComboSignal,VWAP上方+EMA多头排列,趋势共振,【共振信号】机构强势+均线多头！中线持有信号,Valid(VWAP[t]) AND Valid(EMA20[t]) AND Close[t] > VWAP[t] AND EMA20[t] > EMA50[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 65%。
+LumenAlpha,ComboSignal,多头排列+MACD红柱,趋势共振,【共振信号】趋势延续！多头排列且MACD红柱,Valid(MA5[t]) AND Valid(MACD[t]) AND MA5[t] > MA10[t] AND Close[t] > MA5[t] AND MACD[t] > 0 AND MACD[t] > MACD[t-1],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,组合信号在 generate_signals 中会乘以 1.5 后进入总分。 代码内标注胜率 65%。
 LumenAlpha,CompositeScore,lumen_total_score,综合评分,SignalGenerator.calculate_score 对所有触发信号分数求和，并映射为 极度强势/综合看多/偏多震荡/偏空震荡/多空平衡。,sum(triggered_signal.score),,mixed,,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,BBD上零轴,短线,主力资金开始净流入,,,bullish,0.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,MACD红柱,短线,MACD红柱放大，多头力量增强,,,bullish,0.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,MACD金叉,短线,DIF上穿DEA，趋势转多,,,bullish,1.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,RSI严重超买,短线,RSI高于80，可能存在回调风险,,,bearish,-1.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,RSI严重超卖,短线,RSI低于20，可能存在反弹机会,,,bullish,1.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,RSI超卖,短线,RSI低于30，存在超卖现象,,,bullish,0.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,动能金叉,短线,动能线上穿辅线，短期动量转强,,,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,多头排列,短线,均线多头排列，短期趋势向上,,,bullish,1.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,底背离,短线,价格创新低但BBD未创新低，可能反转上涨,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,强势区间,短线,AO和BBD都为正，市场处于强势,,,bullish,1.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,空头排列,短线,均线空头排列，短期趋势向下,,,bearish,-1.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,CCI区域,长线,CCI低于-50，偏超卖,,,bullish,0.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,CCI超买,长线,CCI高于100，超买严重,,,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,CCI超卖,长线,CCI低于-100，超卖严重,,,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,EMA多头排列,长线,EMA多头排列，长期趋势向上,,,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,EMA死叉,长线,EMA20下穿EMA50，中期趋势转空,,,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,EMA空头排列,长线,EMA空头排列，长期趋势向下,,,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,EMA金叉,长线,EMA20上穿EMA50，中期趋势转多,,,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,KDJ死叉,长线,KDJ在超买区域死叉，风险信号,,,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,KDJ深度超买,长线,KDJ高于80，深度超买,,,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,KDJ深度超卖,长线,KDJ低于20，深度超卖,,,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,KDJ超卖,长线,K低于30，存在反弹机会,,,bullish,1.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,KDJ金叉,长线,KDJ在超卖区域金叉，强烈买入信号,,,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,KDJ金叉,长线,K上穿D，趋势转多,,,bullish,1.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,VWAP上方,长线,价格在VWAP上方，机构资金流入,,,bullish,1.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,VWAP下方,长线,价格在VWAP下方，机构资金流出,,,bearish,-1.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,价格站上EMA200,长线,价格在200日均线上，多头趋势,,,bullish,1.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,价格跌破EMA200,长线,价格在200日均线下方，空头趋势,,,bearish,-1.5,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,斐波那契底部,长线,价格进入斐波那契支撑区域,,,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
-LumenAlpha,SignalGenerator,斐波那契顶部,长线,价格进入斐波那契压力区域,,,bearish,-1.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,BBD上零轴,短线,主力资金开始净流入,Valid(BBD[t]) AND Valid(BBD[t-1]) AND BBD[t] > 0 AND BBD[t-1] <= 0,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,0.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,MACD红柱,短线,MACD红柱放大，多头力量增强,Valid(DIF[t]) AND Valid(DIF[t-1]) AND NOT (DIF[t] > DEA[t] AND DIF[t-1] <= DEA[t-1]) AND Valid(MACD[t]) AND Valid(MACD[t-1]) AND MACD[t] > 0 AND MACD[t] > MACD[t-1],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,0.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,MACD金叉,短线,DIF上穿DEA，趋势转多,Valid(DIF[t]) AND Valid(DIF[t-1]) AND DIF[t] > DEA[t] AND DIF[t-1] <= DEA[t-1],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,1.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,RSI严重超买,短线,RSI高于80，可能存在回调风险,Valid(RSI[t]) AND NOT (RSI[t] < 20) AND NOT (RSI[t] < 30) AND RSI[t] > 80,t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-1.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,RSI严重超卖,短线,RSI低于20，可能存在反弹机会,Valid(RSI[t]) AND RSI[t] < 20,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,1.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,RSI超卖,短线,RSI低于30，存在超卖现象,Valid(RSI[t]) AND NOT (RSI[t] < 20) AND RSI[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,0.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,动能金叉,短线,动能线上穿辅线，短期动量转强,Valid(动能线[t]) AND Valid(动能线[t-1]) AND 动能线[t] > 动能辅线[t] AND 动能线[t-1] <= 动能辅线[t-1],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,多头排列,短线,均线多头排列，短期趋势向上,Valid(MA5[t]) AND Valid(MA10[t]) AND MA5[t] > MA10[t] AND Close[t] > MA5[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,1.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,底背离,短线,价格创新低但BBD未创新低，可能反转上涨,"HistoryLength >= 20 AND Valid(BBD[t]) AND Valid(Min(BBD,20)[t]) AND Close[t] == Min(Close,20)[t] AND BBD[t] > Min(BBD,20)[t]",t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,强势区间,短线,AO和BBD都为正，市场处于强势,Valid(AO[t]) AND Valid(BBD[t]) AND AO[t] > 0 AND BBD[t] > 0,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,1.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,空头排列,短线,均线空头排列，短期趋势向下,Valid(MA5[t]) AND Valid(MA10[t]) AND NOT (MA5[t] > MA10[t] AND Close[t] > MA5[t]) AND MA5[t] < MA10[t] AND Close[t] < MA5[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-1.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,CCI区域,长线,CCI低于-50，偏超卖,Valid(CCI[t]) AND NOT (CCI[t] < -100) AND CCI[t] < -50,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,0.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,CCI超买,长线,CCI高于100，超买严重,Valid(CCI[t]) AND NOT (CCI[t] < -100) AND NOT (CCI[t] < -50) AND CCI[t] > 100,t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,CCI超卖,长线,CCI低于-100，超卖严重,Valid(CCI[t]) AND CCI[t] < -100,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,EMA多头排列,长线,EMA多头排列，长期趋势向上,Valid(EMA20[t]) AND Valid(EMA50[t]) AND Valid(EMA200[t]) AND EMA20[t] > EMA50[t] > EMA200[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,EMA死叉,长线,EMA20下穿EMA50，中期趋势转空,Valid(EMA20[t]) AND Valid(EMA50[t]) AND NOT (EMA20[t-1] < EMA50[t-1] AND EMA20[t] > EMA50[t]) AND EMA20[t-1] > EMA50[t-1] AND EMA20[t] < EMA50[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,EMA空头排列,长线,EMA空头排列，长期趋势向下,Valid(EMA20[t]) AND Valid(EMA50[t]) AND Valid(EMA200[t]) AND NOT (EMA20[t] > EMA50[t] > EMA200[t]) AND EMA20[t] < EMA50[t] < EMA200[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,EMA金叉,长线,EMA20上穿EMA50，中期趋势转多,Valid(EMA20[t]) AND Valid(EMA50[t]) AND EMA20[t-1] < EMA50[t-1] AND EMA20[t] > EMA50[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,KDJ死叉,长线,KDJ在超买区域死叉，风险信号,Valid(K[t]) AND Valid(D[t]) AND NOT (K[t] > D[t] AND K[t-1] <= D[t-1]) AND K[t] < D[t] AND K[t-1] >= D[t-1] AND K[t] > 70 AND D[t] > 70,t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,KDJ深度超买,长线,KDJ高于80，深度超买,Valid(K[t]) AND Valid(D[t]) AND NOT (K[t] < 20 AND D[t] < 20) AND NOT (K[t] < 30) AND K[t] > 80 AND D[t] > 80,t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,KDJ深度超卖,长线,KDJ低于20，深度超卖,Valid(K[t]) AND Valid(D[t]) AND K[t] < 20 AND D[t] < 20,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,KDJ超卖,长线,K低于30，存在反弹机会,Valid(K[t]) AND Valid(D[t]) AND NOT (K[t] < 20 AND D[t] < 20) AND K[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,1.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,KDJ金叉,长线,KDJ在超卖区域金叉，强烈买入信号,Valid(K[t]) AND Valid(D[t]) AND K[t] > D[t] AND K[t-1] <= D[t-1] AND K[t] < 30 AND D[t] < 30,t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,KDJ金叉,长线,K上穿D，趋势转多,Valid(K[t]) AND Valid(D[t]) AND K[t] > D[t] AND K[t-1] <= D[t-1] AND NOT (K[t] < 30 AND D[t] < 30),t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,1.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,VWAP上方,长线,价格在VWAP上方，机构资金流入,Valid(VWAP[t]) AND Close[t] > VWAP[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,1.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,VWAP下方,长线,价格在VWAP下方，机构资金流出,Valid(VWAP[t]) AND NOT (Close[t] > VWAP[t]),t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-1.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,价格站上EMA200,长线,价格在200日均线上，多头趋势,Valid(EMA200[t]) AND Close[t] > EMA200[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,1.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,价格跌破EMA200,长线,价格在200日均线下方，空头趋势,Valid(EMA200[t]) AND NOT (Close[t] > EMA200[t]),t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-1.5,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,斐波那契底部,长线,价格进入斐波那契支撑区域,Valid(FIB_Low[t]) AND Valid(FIB_High[t]) AND FIB_0382[t] AND Close[t] < FIB_0382[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bullish,2.0,LumenAlpha/stock_analyzer_project/indicators.py,
+LumenAlpha,SignalGenerator,斐波那契顶部,长线,价格进入斐波那契压力区域,Valid(FIB_Low[t]) AND Valid(FIB_High[t]) AND NOT (FIB_0382[t] AND Close[t] < FIB_0382[t]) AND FIB_0618[t] AND Close[t] > FIB_0618[t],t=最新交易日；t-1=前一交易日；Valid=非空检查,bearish,-1.5,LumenAlpha/stock_analyzer_project/indicators.py,
 qlib,Alpha158,KSFT,K线偏移,2*close-high-low，相对开盘归一，衡量收盘在高低区间中的偏向。,(2*$close-$high-$low)/$open,,,,microsoft-qlib/qlib/contrib/data/loader.py,
 qlib,Alpha158,KSFT2,K线偏移,2*close-high-low，相对开盘归一，衡量收盘在高低区间中的偏向。,(2*$close-$high-$low)/($high-$low+1e-12),window=2,,,microsoft-qlib/qlib/contrib/data/loader.py,
 qlib,Alpha158,KMID,K线实体收益,($close-$open)/$open，收盘相对开盘的实体强弱。,($close-$open)/$open,,,,microsoft-qlib/qlib/contrib/data/loader.py,
