@@ -20,15 +20,15 @@ RSYNC_EXCLUDES=(
   --exclude "node_modules/" \
   --exclude "__pycache__/" \
   --exclude "backups/" \
-  --exclude "data/*.sqlite*" \
-  --exclude "data/sector_rotation/cache/" \
-  --exclude "data/sector_rotation/daily_runs/" \
-  --exclude "data/sector_rotation/ai_analysis/"
+  --exclude "/data/*.sqlite*" \
+  --exclude "/data/sector_rotation/cache/" \
+  --exclude "/data/sector_rotation/daily_runs/" \
+  --exclude "/data/sector_rotation/ai_analysis/"
 )
 
 if [[ "${SYNC_DATA:-0}" != "1" ]]; then
   RSYNC_EXCLUDES+=(
-    --exclude "data/"
+    --exclude "/data/"
     --exclude "web/sector_rotation_dashboard/dashboard_data.js"
     --exclude "web/sector_rotation_dashboard/daily_analysis.md"
   )
