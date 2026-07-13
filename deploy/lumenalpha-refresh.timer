@@ -1,8 +1,8 @@
 [Unit]
-Description=Run LumenAlpha daily stock analysis refresh at 21:00 Asia/Shanghai
+Description=Run LumenAlpha daily stock analysis refresh at 16:00 Asia/Shanghai
 
 [Timer]
-OnCalendar=*-*-* 21:00:00
+OnCalendar=*-*-* 16:00:00
 Persistent=true
 Unit=lumenalpha-refresh.service
 
