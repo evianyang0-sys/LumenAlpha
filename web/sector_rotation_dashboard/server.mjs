@@ -426,7 +426,7 @@ function mockAnalysis(type, context) {
     summary: `模拟分析：${subject} 的本地信号已汇总，配置 DEEPSEEK_API_KEY 后会返回 DeepSeek 实时解释。`,
     bullish_points: ["本地综合分、人气或板块趋势中存在可观察强项。"],
     risk_points: ["当前为模拟结果，不应用于真实判断。"],
-    signal_conflicts: ["需要真实模型读取上下文后判断 qlib、LumenAlpha、人气是否冲突。"],
+    signal_conflicts: ["需要真实模型读取上下文后判断 LumenAlpha 与人气信号是否冲突。"],
     watch_levels: ["关注最近5日显著信号和30日K线关键位置。"],
     next_day_plan: ["配置 API key 后重新点击 AI分析。"],
     confidence: "mock",

@@ -53,6 +53,12 @@
       .replaceAll("'", "&#039;");
   }
 
+  function brandText(value) {
+    return String(value ?? "")
+      .replace(/qlib/gi, "LumenAlpha")
+      .replace(/LumenAlpha\s*(?:[、,/]|and|与|和)\s*LumenAlpha(?:-style)?/gi, "LumenAlpha");
+  }
+
   function num(value, digits = 1) {
     const n = Number(value);
     if (!Number.isFinite(n)) return "--";
@@ -194,13 +200,19 @@
 
   function sourceName(source) {
     if (source === "Eastmoney") return "人气";
+    if (source === "qlib" || source === "LumenAlpha") return "LumenAlpha";
     return source || "--";
   }
 
   function projectLabel(project) {
-    if (project === "qlib") return "qlib";
-    if (project === "LumenAlpha") return "LumenAlpha";
+    if (project === "qlib" || project === "LumenAlpha") return "LumenAlpha";
     return project || "--";
+  }
+
+  function factorSourceLabel(item) {
+    const source = item.source_file || item.family || "--";
+    if (item.project === "qlib" || /qlib/i.test(source)) return "LumenAlpha 因子库";
+    return brandText(source);
   }
 
   function aiKey(type, id) {
@@ -283,7 +295,7 @@
   function aiList(items) {
     const rows = Array.isArray(items) ? items.filter(Boolean) : [];
     if (!rows.length) return "";
-    return `<ul>${rows.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
+    return `<ul>${rows.map((item) => `<li>${escapeHtml(brandText(item))}</li>`).join("")}</ul>`;
   }
 
   function renderAiResult(key, title) {
@@ -322,10 +334,10 @@
       `;
     }
     const analysis = item.analysis || {};
-    const fullSummary = String(analysis.summary || "--");
-    const opportunity = (analysis.bullish_points || [])[0] || "暂无明确机会信号";
-    const risk = (analysis.risk_points || [])[0] || "暂无新增风险提示";
-    const plan = (analysis.next_day_plan || [])[0] || "继续观察量价与板块强弱";
+    const fullSummary = brandText(analysis.summary || "--");
+    const opportunity = brandText((analysis.bullish_points || [])[0] || "暂无明确机会信号");
+    const risk = brandText((analysis.risk_points || [])[0] || "暂无新增风险提示");
+    const plan = brandText((analysis.next_day_plan || [])[0] || "继续观察量价与板块强弱");
     return `
       <div class="ai-card">
         <div class="ai-card-head">
@@ -602,10 +614,11 @@
     const topBoard = classifiedBoards
       .filter((board) => Number.isFinite(Number(board.sector_trend_score)))
       .sort((a, b) => Number(b.sector_trend_score) - Number(a.sector_trend_score))[0];
+    const lumenSignalCount = Number(sourceCount.qlib || 0) + Number(sourceCount.LumenAlpha || 0);
     const items = [
       ["最强板块", boardLabel(topBoard && topBoard.board_path), "查看板块行情"],
       ["入选股票", review.selected_stocks || "--", "今日有效样本"],
-      ["统一信号", review.unified_signal_rows || "--", `${sourceCount.qlib || 0} 条 qlib 信号`],
+      ["统一信号", review.unified_signal_rows || "--", `${lumenSignalCount} 条 LumenAlpha 信号`],
       ["K线覆盖", `${curveBoards}/${classifiedBoards.length || 0}`, "明确分类板块"],
     ];
     $("metrics").innerHTML = items
@@ -652,7 +665,7 @@
       .filter(Boolean)
       .slice(0, 4);
     if (!parts.length) return `<span class="signal-badge">暂无显著信号</span>`;
-    return parts.map((part) => `<span class="signal-badge">${escapeHtml(part)}</span>`).join("");
+    return parts.map((part) => `<span class="signal-badge">${escapeHtml(brandText(part))}</span>`).join("");
   }
 
   function renderMiniKline(chart, title = "K线缩略图") {
@@ -871,8 +884,8 @@
       const candle = candles[index];
       const x = xOf(index);
       const y = yOf(m.y || candle.close);
-      const label = String(m.label || "").slice(0, 10);
-      const labelW = Math.max(34, Math.min(76, label.length * 8 + 10));
+      const label = brandText(m.label || "").replace(/^Q:/i, "").slice(0, 12);
+      const labelW = Math.max(34, Math.min(92, label.length * 8 + 10));
       const labelX = Math.max(4, Math.min(width - labelW - 4, x - labelW / 2));
       const labelY = Math.max(3, y - 18 - (markerIndex % 3) * 12);
       const tone = markerTone(m.direction);
@@ -1023,7 +1036,7 @@
         <div class="signal-row">
           <span class="source ${sourceClass(row.source_project)}">${escapeHtml(sourceName(row.source_project))}</span>
           <strong>${escapeHtml(row.name)}</strong>
-          <span><span class="signal-name">${escapeHtml(row.signal_name)}</span><br><span class="evidence">${escapeHtml(row.evidence)}</span></span>
+          <span><span class="signal-name">${escapeHtml(brandText(row.signal_name))}</span><br><span class="evidence">${escapeHtml(brandText(row.evidence))}</span></span>
           <span class="signal-score">${num(row.signal_score, 1)}</span>
           <span class="direction ${escapeHtml(row.direction || "neutral")}">${escapeHtml(row.direction || "neutral")}</span>
         </div>
@@ -1051,10 +1064,10 @@
     const issues = review.known_issues || [];
     const notes = [
       "科技 taxonomy 已能区分 PCB、光模块/CPO、液冷温控、算力服务器等细分方向。",
-      "qlib、LumenAlpha、东方财富人气已统一到同一张信号表，并保留来源标记。",
+      "LumenAlpha 与东方财富人气已统一到同一张信号表，并保留来源标记。",
       ...issues,
     ];
-    $("reviewFindings").innerHTML = notes.map((note) => `<div class="review-item">${escapeHtml(note)}</div>`).join("");
+    $("reviewFindings").innerHTML = notes.map((note) => `<div class="review-item">${escapeHtml(brandText(note))}</div>`).join("");
 
     const boards = [...(data.boards || [])]
       .filter(isClassifiedBoard)
@@ -1286,8 +1299,7 @@
 
   function renderMerge() {
     const flow = [
-      ["qlib", "标准因子与模型框架", "Alpha158 / Alpha360 / 表达式因子 / 后续回测"],
-      ["LumenAlpha", "解释性技术信号", "基础指标 / 普通信号 / 组合信号 / 高级形态"],
+      ["LumenAlpha", "统一因子与技术信号", "Alpha158 / Alpha360 / 表达式因子 / 技术形态"],
       ["Taxonomy", "科技板块分层", "一级科技 + 二级主线 + 三级细分板块"],
       ["Signal Table", "统一信号表", "source_project / signal_name / score / evidence"],
       ["Dashboard", "轮动工作台", "龙头显著信号 + 板块K线 + 因子解释"],
@@ -1307,7 +1319,7 @@
       ["date", "信号日期"],
       ["code / name", "股票代码与名称"],
       ["board_l1/l2/l3", "板块层级"],
-      ["source_project", "qlib / LumenAlpha / Eastmoney"],
+      ["source_project", "LumenAlpha / Eastmoney"],
       ["source_module", "来源模块"],
       ["signal_name", "信号名称"],
       ["signal_score", "统一分值"],
@@ -1332,7 +1344,7 @@
   }
 
   function renderMarkdownLite(markdown) {
-    const lines = String(markdown || "").split(/\r?\n/);
+    const lines = brandText(markdown).split(/\r?\n/);
     const html = [];
     let list = [];
 
@@ -1460,7 +1472,7 @@
   function factorItems() {
     let items = factorCatalog.items || [];
     if (state.factorProject !== "all") {
-      items = items.filter((item) => item.project === state.factorProject);
+      items = items.filter((item) => projectLabel(item.project) === state.factorProject);
     }
     if (state.factorFamily !== "all") {
       items = items.filter((item) => factorGroup(item) === state.factorFamily);
@@ -1535,11 +1547,13 @@
   }
 
   function renderFactorTabs() {
-    const projects = ["all", ...new Set((factorCatalog.items || []).map((item) => item.project))];
+    const projectLabels = [...new Set((factorCatalog.items || []).map((item) => projectLabel(item.project)))];
+    const projects = projectLabels.length > 1 ? ["all", ...projectLabels] : projectLabels;
+    if (!projects.includes(state.factorProject)) state.factorProject = projects[0] || "all";
     $("factorProjectTabs").innerHTML = projects
       .map((project) => {
         const active = state.factorProject === project ? " active" : "";
-        const label = project === "all" ? "全部来源" : projectLabel(project);
+        const label = project === "all" ? "全部来源" : project;
         return `<button class="factor-tab${active}" type="button" data-project="${escapeHtml(project)}">${escapeHtml(label)}</button>`;
       })
       .join("");
@@ -1552,7 +1566,7 @@
       });
     });
 
-    const familyBase = state.factorProject === "all" ? factorCatalog.items || [] : (factorCatalog.items || []).filter((item) => item.project === state.factorProject);
+    const familyBase = state.factorProject === "all" ? factorCatalog.items || [] : (factorCatalog.items || []).filter((item) => projectLabel(item.project) === state.factorProject);
     const order = ["趋势", "动量", "成交量", "波动风险", "K线形态", "市场热度", "其他"];
     const available = new Set(familyBase.map(factorGroup));
     const families = ["all", ...order.filter((item) => available.has(item))];
@@ -1578,20 +1592,20 @@
 
   function factorRow(item) {
     const score = item.score === "" || item.score === null || item.score === undefined ? "--" : item.score;
-    const params = item.parameters ? `参数 ${item.parameters}` : "无额外参数";
-    const formula = String(item.formula || "未提供计算说明").replaceAll(" AND ", "\nAND ").replaceAll("；", "；\n");
+    const params = brandText(item.parameters ? `参数 ${item.parameters}` : "无额外参数");
+    const formula = brandText(item.formula || "未提供计算说明").replaceAll(" AND ", "\nAND ").replaceAll("；", "；\n");
     const isUnimplemented = String(item.formula || "").startsWith("当前源码未实现");
     const status = isUnimplemented ? "待实现" : Number(score) > 0 ? "偏多" : Number(score) < 0 ? "偏空" : "解释项";
-    const methodNote = item.notes ? `<p class="factor-method-note">${escapeHtml(item.notes)}</p>` : "";
+    const methodNote = item.notes ? `<p class="factor-method-note">${escapeHtml(brandText(item.notes))}</p>` : "";
     return `
       <div class="factor-row">
         <div class="factor-name">
-          <strong>${escapeHtml(item.name)}</strong>
+          <strong>${escapeHtml(brandText(item.name))}</strong>
           <span>${escapeHtml(factorGroup(item))} · ${escapeHtml(projectLabel(item.project))}</span>
         </div>
-        <div class="factor-meaning"><span>它代表什么</span><p>${escapeHtml(item.meaning || "暂无通俗解释")}</p></div>
+        <div class="factor-meaning"><span>它代表什么</span><p>${escapeHtml(brandText(item.meaning || "暂无通俗解释"))}</p></div>
         <span class="factor-status${isUnimplemented ? " pending" : ""}">${escapeHtml(status)}</span>
-        <details class="factor-method${isUnimplemented ? " is-unimplemented" : ""}"><summary>查看计算方法</summary><div><span class="factor-method-label">触发条件</span><code>${escapeHtml(formula)}</code><p>${escapeHtml(params)} · 来源 ${escapeHtml(item.source_file || item.family || "--")}</p>${methodNote}</div></details>
+        <details class="factor-method${isUnimplemented ? " is-unimplemented" : ""}"><summary>查看计算方法</summary><div><span class="factor-method-label">触发条件</span><code>${escapeHtml(formula)}</code><p>${escapeHtml(params)} · 来源 ${escapeHtml(factorSourceLabel(item))}</p>${methodNote}</div></details>
       </div>
     `;
   }
