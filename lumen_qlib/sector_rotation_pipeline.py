@@ -50,6 +50,7 @@ DEFAULT_DETAIL = ROOT / "data/a_share_hot_rank/a_share_hot_rank_top2000_tech_rec
 DEFAULT_BOARD_SUMMARY = ROOT / "data/a_share_hot_rank/a_share_hot_rank_top2000_by_designed_board_latest.csv"
 DEFAULT_OUTPUT = ROOT / "data/sector_rotation"
 DEFAULT_WEB_DATA = ROOT / "web/sector_rotation_dashboard/dashboard_data.js"
+STOCK_MARKER_DAYS = 20
 
 
 TECH_BOARD_ORDER = [
@@ -101,7 +102,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--history-days", type=int, default=180, help="Calendar days of stock history to fetch.")
     parser.add_argument("--curve-days", type=int, default=60, help="Trading days to keep for sector curves.")
     parser.add_argument("--chart-days", type=int, default=30, help="Trading days to keep for stock and sector k-line charts.")
-    parser.add_argument("--marker-days", type=int, default=5, help="Recent trading days to mark significant signals on k-line charts.")
+    parser.add_argument("--marker-days", type=int, default=5, help="Recent trading days to mark board signals; stock charts keep at least 20 days.")
     parser.add_argument("--top-boards", type=int, default=20, help="Boards to visualize.")
     parser.add_argument("--leaders-per-board", type=int, default=8, help="Leaders sampled per board.")
     parser.add_argument("--max-stocks", type=int, default=180, help="Max unique stocks to fetch.")
@@ -750,6 +751,7 @@ def build_stock_charts(
     marker_days: int,
 ) -> dict[str, Any]:
     charts: dict[str, Any] = {}
+    stock_marker_days = min(chart_days, max(marker_days, STOCK_MARKER_DAYS))
     for _, stock in leaders.head(80).iterrows():
         code = normalize_code(stock["code"])
         df = histories.get(code, pd.DataFrame())
@@ -759,7 +761,7 @@ def build_stock_charts(
         signals = signal_df[signal_df["code"].map(normalize_code) == code] if not signal_df.empty else pd.DataFrame()
         charts[code] = {
             "candles": history_to_candles(df, chart_days),
-            "markers": derive_recent_markers(df, signals, marker_days, "price"),
+            "markers": derive_recent_markers(df, signals, stock_marker_days, "price"),
         }
     return charts
 
@@ -850,6 +852,9 @@ def build_dashboard_payload(
     leaders_per_board: int,
 ) -> dict[str, Any]:
     top_leaders = leaders.head(80).copy()
+    dashboard_signals = signal_df.copy()
+    dashboard_signals["_abs_score"] = pd.to_numeric(dashboard_signals["signal_score"], errors="coerce").abs()
+    dashboard_signals = dashboard_signals.sort_values("_abs_score", ascending=False).drop(columns="_abs_score")
     board_cards = board_summary[board_summary["board_path"].isin(selected_boards)].copy()
     if "sector_trend_score" not in board_cards:
         board_cards["sector_trend_score"] = 50
@@ -860,7 +865,7 @@ def build_dashboard_payload(
         "leaders": records_for_json(top_leaders),
         "boards": records_for_json(board_cards),
         "curves": records_for_json(curve_df),
-        "signals": records_for_json(signal_df.sort_values("signal_score", ascending=False).head(250)),
+        "signals": records_for_json(dashboard_signals),
         "stockCharts": build_stock_charts(top_leaders, histories, signal_df, chart_days, marker_days),
         "boardCharts": build_board_charts(detail, leaders, selected_boards, histories, chart_days, marker_days, leaders_per_board),
     }

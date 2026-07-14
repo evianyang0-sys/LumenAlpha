@@ -91,6 +91,59 @@ LOCAL_QLIB_ADAPTERS = [
     ("volatility_20d", "20日波动", "Std(close.pct_change(), 20)", "近20日收益率波动，用作风险惩罚项。"),
 ]
 
+MARKET_SIGNAL_CATALOG = [
+    (
+        "hot_rank_score",
+        "人气热度",
+        "100 × (1 - (rank - 1) / market_all_count)",
+        "把东方财富全市场人气排名换算为 0 到 100 分，排名越靠前分数越高。",
+    ),
+    (
+        "rank_change",
+        "人气排名变化",
+        "clip(rank_change, -50, 50)",
+        "衡量来源榜单中的人气排名变化；正值表示排名提升，负值表示排名回落。",
+    ),
+]
+
+PRICE_MARKER_CATALOG = [
+    (
+        "强势上涨",
+        "价格行为",
+        "Close[t] / Close[t-1] - 1 >= 7%",
+        "单日收盘涨幅达到 7%，用于标记短线价格显著走强。",
+        "bullish",
+    ),
+    (
+        "风险回撤",
+        "价格行为",
+        "Close[t] / Close[t-1] - 1 <= -5%",
+        "单日收盘跌幅达到 5%，用于提示短线波动和回撤风险。",
+        "bearish",
+    ),
+    (
+        "放量上涨",
+        "量价行为",
+        "Close[t] > Close[t-1] AND Volume[t] / Mean(Volume[t-20:t-1]) >= 1.8",
+        "股价上涨且成交量达到此前 20 日均量的 1.8 倍，表示量价同步增强。",
+        "bullish",
+    ),
+    (
+        "突破20日高点",
+        "价格行为",
+        "High[t] >= Max(High[t-20:t-1])",
+        "当日最高价达到或突破此前 20 个交易日最高价。",
+        "bullish",
+    ),
+    (
+        "站上MA20",
+        "均线行为",
+        "Close[t] > MA20[t] AND Close[t-1] <= MA20[t-1]",
+        "收盘价由 20 日均线下方上穿至均线上方。",
+        "bullish",
+    ),
+]
+
 ADVANCED_SIGNAL_FORMULAS = {
     "信号_弱转强": "存在 j∈[t-5,t-1]：Close[j]/Close[j-1]-1 > 9.5%，且 Volume[t] < 0.7×Mean(Volume[j+1:t])，Close[t] > Low[j]，Volume[t] > 1.5×VOL_MA5[t]",
     "信号_缩量企稳MA5": "Volume[t-k] < 0.7×VOL_MA5[t-k]（k=0,1,2），且 |Close[t]-MA5[t]|/MA5[t] < 2%",
@@ -243,6 +296,40 @@ def build_qlib_catalog() -> list[dict[str, Any]]:
             )
         )
     return rows
+
+
+def build_market_catalog() -> list[dict[str, Any]]:
+    return [
+        row(
+            "Eastmoney",
+            "PopularitySignal",
+            name,
+            category,
+            meaning,
+            formula,
+            source_file="lumen_qlib/sector_rotation_pipeline.py",
+            notes="人气信号用于反映市场关注度，不代表价格趋势必然延续。",
+        )
+        for name, category, formula, meaning in MARKET_SIGNAL_CATALOG
+    ]
+
+
+def build_price_marker_catalog() -> list[dict[str, Any]]:
+    return [
+        row(
+            "LumenAlpha",
+            "PriceActionMarker",
+            name,
+            category,
+            meaning,
+            formula,
+            parameters=SIGNAL_FORMULA_PARAMETERS,
+            direction=direction,
+            source_file="lumen_qlib/sector_rotation_pipeline.py",
+            notes="用于个股 K 线最近 20 个交易日的显著信号标记。",
+        )
+        for name, category, formula, meaning, direction in PRICE_MARKER_CATALOG
+    ]
 
 
 def static_eval(node: ast.AST) -> Any:
@@ -465,7 +552,7 @@ def build_payload(items: list[dict[str, Any]]) -> dict[str, Any]:
 def main() -> int:
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     WEB_OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    items = build_qlib_catalog() + build_lumen_catalog()
+    items = build_qlib_catalog() + build_lumen_catalog() + build_market_catalog() + build_price_marker_catalog()
     items = sorted(items, key=lambda item: (item["project"], item["family"], item["category"], item["name"]))
     payload = build_payload(items)
 

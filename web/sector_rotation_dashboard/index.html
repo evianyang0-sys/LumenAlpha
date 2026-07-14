@@ -18,8 +18,8 @@
           <button class="nav-item" type="button" data-view="dashboard" data-section="trendsSection"><span class="nav-icon">▥</span><span>板块行情</span></button>
           <button class="nav-item" type="button" data-view="dashboard" data-section="leadersSection"><span class="nav-icon">⌁</span><span>龙头观察</span></button>
           <button class="nav-item" type="button" data-view="analysis"><span class="nav-icon">✦</span><span>AI 日报</span></button>
-          <button class="nav-item" type="button" data-view="dashboard" data-section="signalsSection"><span class="nav-icon">◎</span><span>信号中心</span></button>
-          <button class="nav-item" type="button" data-view="factor"><span class="nav-icon">≋</span><span>因子解释</span></button>
+          <button class="nav-item" type="button" data-view="dashboard" data-section="signalsSection"><span class="nav-icon">◎</span><span>触发信号</span></button>
+          <button class="nav-item" type="button" data-view="factor"><span class="nav-icon">≋</span><span>信号台</span></button>
           <button class="nav-item" type="button" data-view="watchlist"><span class="nav-icon">☆</span><span>自选关注</span><span id="watchCount" class="nav-count">0</span></button>
           <button class="nav-item" type="button" data-view="review"><span class="nav-icon">◫</span><span>数据状态</span></button>
         </nav>
@@ -125,8 +125,8 @@
           <section id="signalsSection" class="panel signals-panel">
             <div class="panel-head">
               <div>
-                <h2>信号中心</h2>
-                <p>每只股票保留最值得关注的一条信号</p>
+                <h2>触发信号</h2>
+                <p>入选股票中每只保留最值得关注的一条信号</p>
               </div>
             </div>
             <div class="signal-toolbar">
@@ -138,6 +138,10 @@
             </div>
             <div id="signalTable" class="signal-table"></div>
           </section>
+        </div>
+
+        <div id="stockView" class="view">
+          <main id="stockPage" class="stock-page" aria-live="polite"></main>
         </div>
 
         <div id="analysisView" class="view">
@@ -157,8 +161,8 @@
           <section class="panel factor-hero">
             <div class="panel-head">
               <div>
-                <h2>因子解释</h2>
-                <p id="factorGeneratedAt">把量化语言翻译成普通投资者能读懂的判断</p>
+                <h2>信号台</h2>
+                <p id="factorGeneratedAt">查看信号含义、计算方式和量价因子说明</p>
               </div>
               <div id="factorTotal" class="coverage-badge">--</div>
             </div>
@@ -170,7 +174,7 @@
               <div id="factorProjectTabs" class="factor-tabs"></div>
               <label class="factor-search">
                 <span>搜索</span>
-                <input id="factorSearch" type="search" placeholder="因子名称或它代表什么">
+                <input id="factorSearch" type="search" placeholder="信号 / 因子名称或含义">
               </label>
             </div>
             <div id="factorFamilyTabs" class="factor-tabs family-tabs"></div>
@@ -213,8 +217,8 @@
     </div>
 
     <div id="mobileMoreMenu" class="mobile-more-menu" hidden>
-      <button class="mobile-menu-item" type="button" data-view="dashboard" data-section="signalsSection">信号中心</button>
-      <button class="mobile-menu-item" type="button" data-view="factor">因子解释</button>
+      <button class="mobile-menu-item" type="button" data-view="dashboard" data-section="signalsSection">触发信号</button>
+      <button class="mobile-menu-item" type="button" data-view="factor">信号台</button>
       <button class="mobile-menu-item" type="button" data-view="review">数据状态</button>
     </div>
     <nav class="mobile-nav" aria-label="移动端导航">

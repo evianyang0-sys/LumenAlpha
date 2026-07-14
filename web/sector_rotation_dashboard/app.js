@@ -131,6 +131,7 @@
       if ($("watchlistHint")) $("watchlistHint").textContent = `同步失败：${error.message}`;
       if (state.view === "dashboard") renderDashboard();
       if (state.view === "watchlist") renderWatchlist();
+      if (state.view === "stock") renderStockPage();
     }
   }
 
@@ -211,7 +212,8 @@
 
   function factorSourceLabel(item) {
     const source = item.source_file || item.family || "--";
-    if (item.project === "qlib" || /qlib/i.test(source)) return "LumenAlpha 因子库";
+    if (item.family === "PriceActionMarker") return "LumenAlpha 图表信号";
+    if (item.project === "qlib" || /microsoft-qlib/i.test(source)) return "LumenAlpha 因子库";
     return brandText(source);
   }
 
@@ -222,7 +224,7 @@
   const modeSections = {
     overview: { section: "overviewSection", nav: "今日概览" },
     multi: { section: "trendsSection", nav: "板块行情" },
-    list: { section: "signalsSection", nav: "信号中心" },
+    list: { section: "signalsSection", nav: "触发信号" },
   };
 
   const sectionModes = {
@@ -658,14 +660,140 @@
     });
   }
 
-  function signalBadges(text) {
-    const parts = String(text || "")
-      .split("|")
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, 4);
-    if (!parts.length) return `<span class="signal-badge">暂无显著信号</span>`;
-    return parts.map((part) => `<span class="signal-badge">${escapeHtml(brandText(part))}</span>`).join("");
+  const signalDisplayNames = {
+    qlib_factor_score: "综合量价强度",
+    momentum_20d: "20日动量",
+    volume_ratio_20d: "20日量比",
+    hot_rank_score: "市场人气",
+    rank_change: "人气排名变化",
+    lumen_total_score: "技术信号总分",
+  };
+
+  function signalDisplayName(value) {
+    const name = String(value || "").replace(/^信号_/, "");
+    return signalDisplayNames[name] || brandText(name).replaceAll("_", " ");
+  }
+
+  function signalCatalogQuery(value) {
+    return String(value || "").replace(/^信号_/, "").replace(/^Q:/i, "");
+  }
+
+  function signalStrength(row) {
+    const name = String(row.signal_name || "");
+    const score = Number(row.signal_score);
+    if (!Number.isFinite(score)) return { key: "neutral", label: "中性" };
+    if (name === "qlib_factor_score" || name === "hot_rank_score") {
+      if (score >= 70) return { key: "strong", label: "强势" };
+      if (score < 45) return { key: "weak", label: "弱势" };
+      return { key: "neutral", label: "中性" };
+    }
+    if (name === "rank_change") {
+      if (score >= 5) return { key: "strong", label: "强势" };
+      if (score <= -5) return { key: "weak", label: "弱势" };
+      return { key: "neutral", label: "中性" };
+    }
+    const direction = String(row.direction || "").toLowerCase();
+    if (direction === "bearish" || direction === "看空" || score <= -15) return { key: "weak", label: "弱势" };
+    if ((direction === "bullish" || direction === "看多") && score >= 15) return { key: "strong", label: "强势" };
+    return { key: "neutral", label: "中性" };
+  }
+
+  function signalScoreText(row) {
+    const score = Number(row.signal_score);
+    if (!Number.isFinite(score)) return "--";
+    if (row.signal_name === "qlib_factor_score" || row.signal_name === "hot_rank_score") return score.toFixed(1);
+    return `${score > 0 ? "+" : ""}${score.toFixed(1)}`;
+  }
+
+  function signalMeta(row) {
+    const value = Number(row.signal_value);
+    if (row.signal_name === "qlib_factor_score") return `量价综合 ${num(value, 1)}`;
+    if (row.signal_name === "momentum_20d") return `20日涨跌 ${signedPct(value)}`;
+    if (row.signal_name === "volume_ratio_20d") return `当前量比 ${num(value, 2)} 倍`;
+    if (row.signal_name === "hot_rank_score") return `人气排名 #${Number.isFinite(value) ? Math.round(value) : "--"}`;
+    if (row.signal_name === "rank_change") return `排名变化 ${Number.isFinite(value) && value > 0 ? "+" : ""}${num(value, 0)}`;
+    if (row.signal_name === "lumen_total_score") return `技术总分 ${num(value, 1)}`;
+    const evidence = shortText(brandText(row.evidence), 34);
+    return evidence ? `${sourceName(row.source_project)} · ${evidence}` : sourceName(row.source_project);
+  }
+
+  function stockSignalRows(code) {
+    const seen = new Set();
+    return (data.signals || [])
+      .filter((row) => normalizeCode(row.code) === normalizeCode(code))
+      .filter((row) => {
+        const key = `${row.source_project}:${row.signal_name}`;
+        if (!row.signal_name || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .sort((a, b) => Math.abs(Number(b.signal_score || 0)) - Math.abs(Number(a.signal_score || 0)));
+  }
+
+  function signalTriggerButton(row) {
+    const strength = signalStrength(row);
+    const name = signalDisplayName(row.signal_name);
+    return `
+      <button class="trigger-signal ${strength.key}" type="button" data-signal-query="${escapeHtml(signalCatalogQuery(row.signal_name))}" title="在信号台查看“${escapeHtml(name)}”的含义和计算方式">
+        <span><strong>${escapeHtml(name)}</strong><small>${escapeHtml(signalMeta(row))}</small></span>
+        <b>${escapeHtml(signalScoreText(row))}</b>
+      </button>
+    `;
+  }
+
+  function signalTriggerGroup(key, label, rows) {
+    const visible = rows.slice(0, 3);
+    const hidden = rows.slice(3);
+    return `
+      <div class="trigger-group ${key}">
+        <div class="trigger-group-title"><span>${escapeHtml(label)}</span><b>${rows.length}</b></div>
+        ${rows.length ? `<div class="trigger-list">${visible.map(signalTriggerButton).join("")}</div>` : `<div class="trigger-empty">暂无${escapeHtml(label)}</div>`}
+        ${hidden.length ? `<details class="trigger-more"><summary>其余 ${hidden.length} 项</summary><div class="trigger-list">${hidden.map(signalTriggerButton).join("")}</div></details>` : ""}
+      </div>
+    `;
+  }
+
+  function renderTriggeredSignals(leader) {
+    const rows = stockSignalRows(leader.code);
+    const grouped = {
+      strong: rows.filter((row) => signalStrength(row).key === "strong"),
+      weak: rows.filter((row) => signalStrength(row).key === "weak"),
+      neutral: rows.filter((row) => signalStrength(row).key === "neutral"),
+    };
+    return `
+      <section class="triggered-signals">
+        <div class="triggered-signals-head">
+          <div><strong>今日触发信号</strong><span title="综合类分数不低于70为强势、低于45为弱势；普通信号按方向和相对强度分组。">共 ${rows.length} 项 · 相对强弱</span></div>
+          <button type="button" data-open-stock-page="${escapeHtml(normalizeCode(leader.code))}">个股信号台 <span aria-hidden="true">→</span></button>
+        </div>
+        <div class="trigger-groups">
+          ${signalTriggerGroup("strong", "强势信号", grouped.strong)}
+          ${signalTriggerGroup("weak", "弱势信号", grouped.weak)}
+          ${grouped.neutral.length ? signalTriggerGroup("neutral", "中性观察", grouped.neutral) : ""}
+        </div>
+      </section>
+    `;
+  }
+
+  function openSignalStation(query = "") {
+    state.view = "factor";
+    state.factorProject = "all";
+    state.factorFamily = "all";
+    state.factorSearch = signalCatalogQuery(query);
+    state.factorLimit = 24;
+    if ($("factorSearch")) $("factorSearch").value = state.factorSearch;
+    renderFactors();
+    renderViews();
+  }
+
+  function bindSignalStationLinks(container) {
+    if (!container) return;
+    container.querySelectorAll("[data-signal-query]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        openSignalStation(button.dataset.signalQuery || "");
+      });
+    });
   }
 
   function renderMiniKline(chart, title = "K线缩略图") {
@@ -776,16 +904,20 @@
         <div class="kv"><span>量能变化</span><strong>${signedPct(leader.volume_ratio_20)}</strong></div>
       </div>
       <div class="kline-block">
-        <div class="kline-head"><strong>30日K线</strong><span>近5日显著信号 ${chart.markers ? chart.markers.length : 0}</span></div>
+        <div class="kline-head"><strong>30日K线</strong><span>近20日显著信号 ${chart.markers ? chart.markers.length : 0}</span></div>
         ${renderKlineChart(chart, `${leader.name} 30日K线`)}
       </div>
-      <details class="signal-details"><summary>查看原始信号依据</summary><div class="signal-stack">${signalBadges(leader.top_signals)}</div></details>
+      ${renderTriggeredSignals(leader)}
       ${renderAiResult(key, "个股AI分析")}
     `;
     $("leaderDetail").querySelector("[data-detail-watch]")?.addEventListener("click", (event) => {
       toggleWatch(event.currentTarget.dataset.detailWatch);
       renderLeaderLadder();
       renderLeaderDetail();
+    });
+    bindSignalStationLinks($("leaderDetail"));
+    $("leaderDetail").querySelector("[data-open-stock-page]")?.addEventListener("click", (event) => {
+      openStockPage(event.currentTarget.dataset.openStockPage);
     });
     attachAiButton($("leaderDetail"), "stock", normalizeCode(leader.code), () => stockAiContext(leader, chart), renderLeaderDetail);
   }
@@ -812,20 +944,23 @@
     return "#64748b";
   }
 
-  function renderKlineChart(chart, title = "30日K线", windowSize = 30) {
+  function renderKlineChart(chart, title = "30日K线", windowSize = 30, options = {}) {
     const allCandles = (chart && chart.candles) || [];
     const candles = allCandles.slice(-windowSize);
     const markers = (chart && chart.markers) || [];
+    const expanded = options.expanded === true;
     if (!candles.length) {
       return `<div class="empty">暂无 K 线数据</div>`;
     }
-    const width = 560;
-    const height = 300;
-    const pad = { left: 42, right: 14, top: 24, bottom: 22 };
+    const width = expanded ? 1120 : 560;
+    const height = expanded ? 420 : 300;
+    const pad = expanded
+      ? { left: 52, right: 18, top: 30, bottom: 28 }
+      : { left: 42, right: 14, top: 24, bottom: 22 };
     const plotW = width - pad.left - pad.right;
-    const priceH = 184;
-    const volumeTop = 224;
-    const volumeH = 48;
+    const priceH = expanded ? 245 : 184;
+    const volumeTop = expanded ? 314 : 224;
+    const volumeH = expanded ? 70 : 48;
     const highs = candles.map((c) => Number(c.high)).filter(Number.isFinite);
     const lows = candles.map((c) => Number(c.low)).filter(Number.isFinite);
     markers.forEach((m) => {
@@ -876,45 +1011,71 @@
     function averagePath(size) {
       return movingAverage(size).map((value, index) => value == null ? null : `${index === size - 1 ? "M" : "L"}${xOf(index).toFixed(1)},${yOf(value).toFixed(1)}`).filter(Boolean).join(" ");
     }
-    const visibleMarkers = markers
-      .filter((m) => dateToIndex.has(m.date))
-      .slice(-6);
+    const visibleMarkers = markers.filter((m) => dateToIndex.has(m.date));
+    const markerCounts = visibleMarkers.reduce((counts, marker) => {
+      counts.set(marker.date, (counts.get(marker.date) || 0) + 1);
+      return counts;
+    }, new Map());
+    const markerSlots = new Map();
+    const labeledFrom = Math.max(0, visibleMarkers.length - 6);
     const markerSvg = visibleMarkers.map((m, markerIndex) => {
       const index = dateToIndex.get(m.date);
       const candle = candles[index];
-      const x = xOf(index);
+      const slot = markerSlots.get(m.date) || 0;
+      markerSlots.set(m.date, slot + 1);
+      const dateCount = markerCounts.get(m.date) || 1;
+      const x = xOf(index) + (slot - (dateCount - 1) / 2) * (expanded ? 13 : 5);
       const y = yOf(m.y || candle.close);
       const label = brandText(m.label || "").replace(/^Q:/i, "").slice(0, 12);
       const labelW = Math.max(34, Math.min(92, label.length * 8 + 10));
       const labelX = Math.max(4, Math.min(width - labelW - 4, x - labelW / 2));
       const labelY = Math.max(3, y - 18 - (markerIndex % 3) * 12);
       const tone = markerTone(m.direction);
+      const score = Number(m.score);
+      const markerTitle = `${m.date} · ${label}${Number.isFinite(score) ? ` · ${score > 0 ? "+" : ""}${score.toFixed(1)}` : ""}`;
+      const showLabel = markerIndex >= labeledFrom;
+      if (expanded) {
+        return `
+          <g class="kline-marker ${tone} expanded-marker">
+            <title>${escapeHtml(markerTitle)}</title>
+            <line class="signal-tick" x1="${x.toFixed(1)}" y1="${(y - 12).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(y + 12).toFixed(1)}"></line>
+            <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8.2"></circle>
+            <text class="marker-index" x="${x.toFixed(1)}" y="${(y + 3.2).toFixed(1)}" text-anchor="middle">${markerIndex + 1}</text>
+          </g>
+        `;
+      }
       return `
         <g class="kline-marker ${tone}">
-          <line x1="${x.toFixed(1)}" y1="${(labelY + 14).toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${markerFill(m.direction)}" stroke-dasharray="2 2" opacity="0.65"></line>
-          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.6"></circle>
-          <rect x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" width="${labelW.toFixed(1)}" height="16"></rect>
-          <text x="${(labelX + 5).toFixed(1)}" y="${(labelY + 11).toFixed(1)}">${escapeHtml(label)}</text>
+          <title>${escapeHtml(markerTitle)}</title>
+          ${showLabel ? `<line x1="${x.toFixed(1)}" y1="${(labelY + 14).toFixed(1)}" x2="${x.toFixed(1)}" y2="${y.toFixed(1)}" stroke="${markerFill(m.direction)}" stroke-dasharray="2 2" opacity="0.65"></line>` : `<line class="signal-tick" x1="${x.toFixed(1)}" y1="${(y - 7).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(y + 7).toFixed(1)}"></line>`}
+          <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${showLabel ? "3.6" : "3.1"}"></circle>
+          ${showLabel ? `<rect x="${labelX.toFixed(1)}" y="${labelY.toFixed(1)}" width="${labelW.toFixed(1)}" height="16"></rect><text x="${(labelX + 5).toFixed(1)}" y="${(labelY + 11).toFixed(1)}">${escapeHtml(label)}</text>` : ""}
         </g>
       `;
     }).join("");
     const start = candles[0]?.date?.slice(5) || "";
     const end = candles[candles.length - 1]?.date?.slice(5) || "";
+    const dateTicks = expanded
+      ? candles.map((candle, index) => {
+        if (index % 5 !== 0 && index !== candles.length - 1) return "";
+        const x = xOf(index);
+        return `<line class="kline-date-tick" x1="${x.toFixed(1)}" y1="${volumeTop + volumeH}" x2="${x.toFixed(1)}" y2="${volumeTop + volumeH + 5}"></line><text class="kline-date-label" x="${x.toFixed(1)}" y="${height - 8}" text-anchor="middle">${escapeHtml(candle.date.slice(5))}</text>`;
+      }).join("")
+      : `<text x="${pad.left}" y="${height - 6}" font-size="9" fill="#94a3b8">${escapeHtml(start)}</text><text x="${width - pad.right - 28}" y="${height - 6}" font-size="9" fill="#94a3b8">${escapeHtml(end)}</text>`;
     const grid = [0, 0.5, 1].map((ratio) => {
       const y = pad.top + priceH * ratio;
       const value = max - span * ratio;
       return `<line class="kline-grid" x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"></line><text class="kline-y-label" x="4" y="${y + 3}">${num(value, 2)}</text>`;
     }).join("");
     return `
-      <svg class="kline-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">
+      <svg class="kline-chart${expanded ? " expanded-kline-chart" : ""}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">
         ${grid}
         <line class="kline-axis" x1="${pad.left}" y1="${pad.top + priceH}" x2="${width - pad.right}" y2="${pad.top + priceH}"></line>
         <text x="${pad.left}" y="14" font-size="10" fill="#64748b">${escapeHtml(title)}</text>
         <text class="kline-legend ma5" x="${width - 132}" y="14">MA5</text>
         <text class="kline-legend ma10" x="${width - 92}" y="14">MA10</text>
         <text class="kline-legend ma20" x="${width - 48}" y="14">MA20</text>
-        <text x="${pad.left}" y="${height - 6}" font-size="9" fill="#94a3b8">${escapeHtml(start)}</text>
-        <text x="${width - pad.right - 28}" y="${height - 6}" font-size="9" fill="#94a3b8">${escapeHtml(end)}</text>
+        ${dateTicks}
         ${candleSvg}
         <path class="ma-line ma5" d="${averagePath(5)}"></path>
         <path class="ma-line ma10" d="${averagePath(10)}"></path>
@@ -925,6 +1086,168 @@
         ${volumeSvg}
       </svg>
     `;
+  }
+
+  function stockChartMarkers(chart) {
+    const dates = new Set((chart?.candles || []).map((candle) => candle.date));
+    return (chart?.markers || []).filter((marker) => dates.has(marker.date));
+  }
+
+  function markerDisplayName(marker) {
+    return brandText(marker?.label || "信号").replace(/^(?:Q|L|热):/i, "");
+  }
+
+  function markerCatalogQuery(marker) {
+    const name = markerDisplayName(marker);
+    const queries = {
+      LumenAlpha因子: "qlib_factor_score",
+      qlib因子: "qlib_factor_score",
+      Lumen总分: "lumen_total_score",
+      "20日动量": "momentum_20d",
+      量比: "volume_ratio_20d",
+      人气: "hot_rank_score",
+    };
+    return queries[name] || name;
+  }
+
+  function markerSourceName(marker) {
+    if (marker?.source === "price") return "价格行为";
+    return sourceName(marker?.source);
+  }
+
+  function markerScoreText(marker) {
+    const score = Number(marker?.score);
+    if (!Number.isFinite(score)) return "--";
+    const name = markerDisplayName(marker);
+    if (marker?.source === "price" && name === "放量上涨") return `${score.toFixed(2)} 倍量`;
+    if (marker?.source === "price") return `${score > 0 ? "+" : ""}${score.toFixed(1)}%`;
+    return score.toFixed(1);
+  }
+
+  function renderStockSignalTimeline(markers) {
+    if (!markers.length) return `<div class="empty">最近 20 个交易日暂无显著信号</div>`;
+    const grouped = new Map();
+    markers.forEach((marker, index) => {
+      const row = { ...marker, markerIndex: index + 1 };
+      if (!grouped.has(marker.date)) grouped.set(marker.date, []);
+      grouped.get(marker.date).push(row);
+    });
+    return [...grouped.entries()].reverse().map(([date, rows]) => `
+      <div class="stock-signal-day">
+        <time datetime="${escapeHtml(date)}"><strong>${escapeHtml(date.slice(5))}</strong><span>${rows.length} 项</span></time>
+        <div class="stock-signal-day-list">
+          ${rows.map((marker) => {
+            const tone = markerTone(marker.direction);
+            const name = markerDisplayName(marker);
+            return `
+              <button class="stock-signal-entry ${tone}" type="button" data-signal-query="${escapeHtml(markerCatalogQuery(marker))}" title="查看“${escapeHtml(name)}”的含义和计算方式">
+                <span class="stock-signal-number">${String(marker.markerIndex).padStart(2, "0")}</span>
+                <span class="stock-signal-copy"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(markerSourceName(marker))} · ${escapeHtml(markerScoreText(marker))}</small></span>
+                <span class="stock-signal-link">释义 <span aria-hidden="true">→</span></span>
+              </button>
+            `;
+          }).join("")}
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function openStockPage(code) {
+    state.leaderCode = normalizeCode(code);
+    state.view = "stock";
+    renderStockPage();
+    renderViews();
+  }
+
+  function closeStockPage() {
+    state.view = "dashboard";
+    state.section = "leadersSection";
+    state.mode = "overview";
+    state.activeDashboardNav = "龙头观察";
+    renderDashboard();
+    renderViews();
+  }
+
+  function renderStockPage() {
+    const container = $("stockPage");
+    if (!container) return;
+    const code = normalizeCode(state.leaderCode);
+    const leader = (data.leaders || []).find((item) => normalizeCode(item.code) === code);
+    if (!leader) {
+      container.innerHTML = `<button class="stock-back" type="button" data-stock-back><span aria-hidden="true">←</span> 返回龙头观察</button><div class="empty">没有找到该股票的数据</div>`;
+      container.querySelector("[data-stock-back]")?.addEventListener("click", closeStockPage);
+      return;
+    }
+    const chart = (data.stockCharts || {})[code] || { candles: [], markers: [] };
+    const candles = chart.candles || [];
+    const markers = stockChartMarkers(chart);
+    const latest = candles[candles.length - 1];
+    const first = candles[0];
+    const intervalReturn = latest && first && Number(first.close)
+      ? Number(latest.close) / Number(first.close) - 1
+      : NaN;
+    const bullishCount = markers.filter((marker) => marker.direction === "bullish").length;
+    const bearishCount = markers.filter((marker) => marker.direction === "bearish").length;
+    const neutralCount = markers.length - bullishCount - bearishCount;
+    const key = aiKey("stock", code);
+    container.innerHTML = `
+      <div class="stock-page-toolbar">
+        <button class="stock-back" type="button" data-stock-back><span aria-hidden="true">←</span> 返回龙头观察</button>
+        <button class="stock-page-watch${isWatched(code) ? " active" : ""}" type="button" data-stock-page-watch="${escapeHtml(code)}">${isWatched(code) ? "★ 已关注" : "☆ 加入自选"}</button>
+      </div>
+      <header class="stock-page-header" style="${styleVars(leader.board_path)}">
+        <div class="stock-page-identity">
+          <span>${escapeHtml(boardLabel(leader.board_path))}</span>
+          <h2>${escapeHtml(leader.name)} <small>${escapeHtml(code)}</small></h2>
+          <p>人气 #${escapeHtml(leader.rank)} · 行情截至 ${escapeHtml(latest?.date || "--")}</p>
+        </div>
+        <div class="stock-page-score"><span>综合强度</span><strong>${num(leader.combined_score, 1)}</strong></div>
+      </header>
+      <div class="stock-page-stats">
+        <div><span>最新收盘</span><strong>${num(latest?.close, 2)}</strong><small>${Number.isFinite(Number(latest?.pct)) ? `${Number(latest.pct) >= 0 ? "+" : ""}${num(latest.pct, 2)}%` : "--"}</small></div>
+        <div><span>30日区间</span><strong>${signedPct(intervalReturn)}</strong><small>${candles.length} 个交易日</small></div>
+        <div><span>5日涨幅</span><strong>${pct(leader.ret_5d)}</strong><small>短线动量</small></div>
+        <div><span>20日涨幅</span><strong>${pct(leader.ret_20d)}</strong><small>波段动量</small></div>
+        <div><span>量价强度</span><strong>${num(leader.qlib_factor_score, 1)}</strong><small>LumenAlpha</small></div>
+        <div><span>显著信号</span><strong>${markers.length}</strong><small>${bullishCount} 强 · ${bearishCount} 弱${neutralCount ? ` · ${neutralCount} 中性` : ""}</small></div>
+      </div>
+      <section class="stock-chart-section">
+        <div class="stock-section-head">
+          <div><h3>30日全景 K 线</h3><p>最近 20 个交易日的显著信号全部标记</p></div>
+          <div class="stock-chart-legend"><span class="bullish"><i></i>强势</span><span class="bearish"><i></i>弱势</span><span class="neutral"><i></i>中性</span></div>
+        </div>
+        <div class="stock-chart-scroll">${renderKlineChart(chart, `${leader.name} 30日全景K线`, 30, { expanded: true })}</div>
+      </section>
+      <section class="stock-signal-section">
+        <div class="stock-section-head"><div><h3>完整信号明细</h3><p>按交易日归档 · 含来源与触发值</p></div><strong class="stock-signal-total">${markers.length} 项</strong></div>
+        <div class="stock-signal-timeline">${renderStockSignalTimeline(markers)}</div>
+      </section>
+      <section class="stock-detail-grid">
+        <div class="stock-score-breakdown">
+          <div class="stock-section-head"><div><h3>评分结构</h3><p>拆分当前综合强度来源</p></div></div>
+          <div class="score-bars">
+            ${scoreLine("综合", leader.combined_score, "#ef4444")}
+            ${scoreLine("量价强度", leader.qlib_factor_score, "#2f7df6")}
+            ${scoreLine("技术形态", leader.lumen_score_norm, "#d97706")}
+            ${scoreLine("板块动能", leader.sector_trend_score, "#059669")}
+          </div>
+        </div>
+        <div class="stock-page-ai">${renderAiResult(key, "个股AI分析")}</div>
+      </section>
+    `;
+    container.querySelector("[data-stock-back]")?.addEventListener("click", closeStockPage);
+    container.querySelector("[data-stock-page-watch]")?.addEventListener("click", async (event) => {
+      await toggleWatch(event.currentTarget.dataset.stockPageWatch);
+      renderStockPage();
+    });
+    bindSignalStationLinks(container);
+    attachAiButton(container, "stock", code, () => stockAiContext(leader, chart), renderStockPage);
+    requestAnimationFrame(() => {
+      const chartViewport = container.querySelector(".stock-chart-scroll");
+      if (chartViewport && chartViewport.scrollWidth > chartViewport.clientWidth) {
+        chartViewport.scrollLeft = chartViewport.scrollWidth - chartViewport.clientWidth;
+      }
+    });
   }
 
   function renderSectorTrends() {
@@ -1032,16 +1355,21 @@
       return;
     }
     $("signalTable").innerHTML = rows
-      .map((row) => `
-        <div class="signal-row">
-          <span class="source ${sourceClass(row.source_project)}">${escapeHtml(sourceName(row.source_project))}</span>
-          <strong>${escapeHtml(row.name)}</strong>
-          <span><span class="signal-name">${escapeHtml(brandText(row.signal_name))}</span><br><span class="evidence">${escapeHtml(brandText(row.evidence))}</span></span>
-          <span class="signal-score">${num(row.signal_score, 1)}</span>
-          <span class="direction ${escapeHtml(row.direction || "neutral")}">${escapeHtml(row.direction || "neutral")}</span>
-        </div>
-      `)
+      .map((row) => {
+        const strength = signalStrength(row);
+        const directionClass = strength.key === "strong" ? "bullish" : strength.key === "weak" ? "bearish" : "neutral";
+        return `
+          <div class="signal-row">
+            <span class="source ${sourceClass(row.source_project)}">${escapeHtml(sourceName(row.source_project))}</span>
+            <strong>${escapeHtml(row.name)}</strong>
+            <span><span class="signal-name-line"><span class="signal-name">${escapeHtml(signalDisplayName(row.signal_name))}</span><button class="signal-help" type="button" data-signal-query="${escapeHtml(signalCatalogQuery(row.signal_name))}" title="查看含义和计算方式" aria-label="查看${escapeHtml(signalDisplayName(row.signal_name))}的含义和计算方式">?</button></span><br><span class="evidence">${escapeHtml(brandText(row.evidence))}</span></span>
+            <span class="signal-score">${escapeHtml(signalScoreText(row))}</span>
+            <span class="direction ${directionClass}">${escapeHtml(strength.label)}</span>
+          </div>
+        `;
+      })
       .join("");
+    bindSignalStationLinks($("signalTable"));
   }
 
   function renderReview() {
@@ -1494,6 +1822,11 @@
         ].join(" ").toLowerCase();
         return text.includes(keyword);
       });
+      items.sort((a, b) => {
+        const aExact = String(a.name || "").toLowerCase() === keyword ? 1 : 0;
+        const bExact = String(b.name || "").toLowerCase() === keyword ? 1 : 0;
+        return bExact - aExact;
+      });
     }
     return items;
   }
@@ -1654,7 +1987,7 @@
         if (target) target.scrollIntoView({ behavior: "auto", block: "start" });
       });
     } else {
-      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "auto" }));
+      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: "instant" }));
     }
   }
 
@@ -1792,6 +2125,8 @@
       renderReview();
     } else if (state.view === "watchlist") {
       renderWatchlist();
+    } else if (state.view === "stock") {
+      renderStockPage();
     }
   }
 
