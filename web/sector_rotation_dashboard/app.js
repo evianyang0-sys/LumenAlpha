@@ -15,6 +15,7 @@
     factorFamily: "all",
     factorSearch: "",
     factorLimit: 24,
+    stockSignalsExpanded: false,
     globalSearch: "",
     dailyReportText: "",
     dailyReportStatus: "读取中",
@@ -952,15 +953,15 @@
     if (!candles.length) {
       return `<div class="empty">暂无 K 线数据</div>`;
     }
-    const width = expanded ? 1120 : 560;
-    const height = expanded ? 420 : 300;
+    const width = expanded ? 1350 : 560;
+    const height = 300;
     const pad = expanded
-      ? { left: 52, right: 18, top: 30, bottom: 28 }
+      ? { left: 52, right: 18, top: 14, bottom: 22 }
       : { left: 42, right: 14, top: 24, bottom: 22 };
     const plotW = width - pad.left - pad.right;
-    const priceH = expanded ? 245 : 184;
-    const volumeTop = expanded ? 314 : 224;
-    const volumeH = expanded ? 70 : 48;
+    const priceH = expanded ? 170 : 184;
+    const volumeTop = expanded ? 218 : 224;
+    const volumeH = expanded ? 48 : 48;
     const highs = candles.map((c) => Number(c.high)).filter(Number.isFinite);
     const lows = candles.map((c) => Number(c.low)).filter(Number.isFinite);
     markers.forEach((m) => {
@@ -1024,7 +1025,7 @@
       const slot = markerSlots.get(m.date) || 0;
       markerSlots.set(m.date, slot + 1);
       const dateCount = markerCounts.get(m.date) || 1;
-      const x = xOf(index) + (slot - (dateCount - 1) / 2) * (expanded ? 13 : 5);
+      const x = xOf(index) + (slot - (dateCount - 1) / 2) * (expanded ? 11 : 5);
       const y = yOf(m.y || candle.close);
       const label = brandText(m.label || "").replace(/^Q:/i, "").slice(0, 12);
       const labelW = Math.max(34, Math.min(92, label.length * 8 + 10));
@@ -1039,7 +1040,7 @@
           <g class="kline-marker ${tone} expanded-marker">
             <title>${escapeHtml(markerTitle)}</title>
             <line class="signal-tick" x1="${x.toFixed(1)}" y1="${(y - 12).toFixed(1)}" x2="${x.toFixed(1)}" y2="${(y + 12).toFixed(1)}"></line>
-            <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="8.2"></circle>
+            <circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7.4"></circle>
             <text class="marker-index" x="${x.toFixed(1)}" y="${(y + 3.2).toFixed(1)}" text-anchor="middle">${markerIndex + 1}</text>
           </g>
         `;
@@ -1067,14 +1068,17 @@
       const value = max - span * ratio;
       return `<line class="kline-grid" x1="${pad.left}" y1="${y}" x2="${width - pad.right}" y2="${y}"></line><text class="kline-y-label" x="4" y="${y + 3}">${num(value, 2)}</text>`;
     }).join("");
+    const chartChrome = options.hideChrome ? "" : `
+      <text x="${pad.left}" y="14" font-size="10" fill="#64748b">${escapeHtml(title)}</text>
+      <text class="kline-legend ma5" x="${width - 132}" y="14">MA5</text>
+      <text class="kline-legend ma10" x="${width - 92}" y="14">MA10</text>
+      <text class="kline-legend ma20" x="${width - 48}" y="14">MA20</text>
+    `;
     return `
       <svg class="kline-chart${expanded ? " expanded-kline-chart" : ""}" viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(title)}">
         ${grid}
         <line class="kline-axis" x1="${pad.left}" y1="${pad.top + priceH}" x2="${width - pad.right}" y2="${pad.top + priceH}"></line>
-        <text x="${pad.left}" y="14" font-size="10" fill="#64748b">${escapeHtml(title)}</text>
-        <text class="kline-legend ma5" x="${width - 132}" y="14">MA5</text>
-        <text class="kline-legend ma10" x="${width - 92}" y="14">MA10</text>
-        <text class="kline-legend ma20" x="${width - 48}" y="14">MA20</text>
+        ${chartChrome}
         ${dateTicks}
         ${candleSvg}
         <path class="ma-line ma5" d="${averagePath(5)}"></path>
@@ -1124,36 +1128,99 @@
     return score.toFixed(1);
   }
 
-  function renderStockSignalTimeline(markers) {
-    if (!markers.length) return `<div class="empty">最近 20 个交易日暂无显著信号</div>`;
+  function stockSignalGroups(markers) {
     const grouped = new Map();
     markers.forEach((marker, index) => {
       const row = { ...marker, markerIndex: index + 1 };
       if (!grouped.has(marker.date)) grouped.set(marker.date, []);
       grouped.get(marker.date).push(row);
     });
-    return [...grouped.entries()].reverse().map(([date, rows]) => `
-      <div class="stock-signal-day">
-        <time datetime="${escapeHtml(date)}"><strong>${escapeHtml(date.slice(5))}</strong><span>${rows.length} 项</span></time>
-        <div class="stock-signal-day-list">
-          ${rows.map((marker) => {
-            const tone = markerTone(marker.direction);
-            const name = markerDisplayName(marker);
-            return `
-              <button class="stock-signal-entry ${tone}" type="button" data-signal-query="${escapeHtml(markerCatalogQuery(marker))}" title="查看“${escapeHtml(name)}”的含义和计算方式">
-                <span class="stock-signal-number">${String(marker.markerIndex).padStart(2, "0")}</span>
-                <span class="stock-signal-copy"><strong>${escapeHtml(name)}</strong><small>${escapeHtml(markerSourceName(marker))} · ${escapeHtml(markerScoreText(marker))}</small></span>
-                <span class="stock-signal-link">释义 <span aria-hidden="true">→</span></span>
-              </button>
-            `;
-          }).join("")}
-        </div>
+    return [...grouped.entries()].reverse().map(([date, rows]) => ({ date, rows }));
+  }
+
+  function visibleStockSignalGroups(groups) {
+    if (state.stockSignalsExpanded) return groups;
+    const visible = [];
+    let rows = 0;
+    for (const group of groups) {
+      visible.push(group);
+      rows += group.rows.length;
+      if (rows >= 10) break;
+    }
+    return visible;
+  }
+
+  function signalStrengthLabel(direction) {
+    if (direction === "bullish") return "强";
+    if (direction === "bearish") return "弱";
+    return "中性";
+  }
+
+  function renderStockSignalTable(markers) {
+    if (!markers.length) return `<div class="empty">最近 20 个交易日暂无显著信号</div>`;
+    const groups = stockSignalGroups(markers);
+    const visibleGroups = visibleStockSignalGroups(groups);
+    const rows = visibleGroups.map(({ date, rows: dateRows }) => dateRows.map((marker, rowIndex) => {
+      const tone = markerTone(marker.direction);
+      const name = markerDisplayName(marker);
+      return `
+        <tr>
+          ${rowIndex === 0 ? `<th scope="rowgroup" rowspan="${dateRows.length}"><strong>${escapeHtml(date.slice(5))}</strong><small>${dateRows.length} 项</small></th>` : ""}
+          <td class="stock-signal-index"><span class="${tone}">${String(marker.markerIndex).padStart(2, "0")}</span></td>
+          <td class="stock-signal-name"><strong>${escapeHtml(name)}</strong></td>
+          <td>${escapeHtml(markerSourceName(marker))}</td>
+          <td>${escapeHtml(markerScoreText(marker))}</td>
+          <td><span class="stock-signal-strength ${tone}">${signalStrengthLabel(marker.direction)}</span></td>
+          <td><button type="button" data-signal-query="${escapeHtml(markerCatalogQuery(marker))}" title="查看“${escapeHtml(name)}”的含义和计算方式">释义</button></td>
+        </tr>
+      `;
+    }).join("")).join("");
+    const canToggle = groups.length > visibleGroups.length || state.stockSignalsExpanded;
+    return `
+      <div class="stock-signal-table-wrap">
+        <table class="stock-signal-table">
+          <thead><tr><th>日期</th><th>#</th><th>信号名称</th><th>信号源</th><th>触发值 / 说明</th><th>强度</th><th>操作</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>
-    `).join("");
+      ${canToggle ? `<button class="stock-signal-toggle" type="button" data-expand-stock-signals>${state.stockSignalsExpanded ? "收起明细" : `展开更多（共 ${markers.length} 项信号）`} <span aria-hidden="true">${state.stockSignalsExpanded ? "↑" : "↓"}</span></button>` : ""}
+    `;
+  }
+
+  function chartAverageValue(candles, windowSize) {
+    const closes = (candles || []).slice(-windowSize).map((candle) => Number(candle.close)).filter(Number.isFinite);
+    if (closes.length < windowSize) return NaN;
+    return closes.reduce((sum, value) => sum + value, 0) / closes.length;
+  }
+
+  function markerNameSummary(markers, direction, limit = 5) {
+    const counts = new Map();
+    markers.filter((marker) => marker.direction === direction).forEach((marker) => {
+      const name = markerDisplayName(marker);
+      const current = counts.get(name) || { marker, count: 0 };
+      current.count += 1;
+      counts.set(name, current);
+    });
+    return [...counts.values()].sort((a, b) => b.count - a.count).slice(0, limit);
+  }
+
+  function renderSignalSummary(markers, direction) {
+    const rows = markerNameSummary(markers, direction);
+    if (!rows.length) return `<span class="stock-insight-empty">暂无</span>`;
+    return rows.map(({ marker, count }) => `<button type="button" class="${markerTone(direction)}" data-signal-query="${escapeHtml(markerCatalogQuery(marker))}">${escapeHtml(markerDisplayName(marker))}${count > 1 ? ` ×${count}` : ""}</button>`).join("");
+  }
+
+  function stockDecisionText(leader, bearishCount) {
+    const trend = Number(leader.combined_score) >= 70 ? "趋势偏强" : Number(leader.combined_score) >= 50 ? "趋势中性" : "趋势偏弱";
+    const momentum = Number(leader.ret_5d) > 0 ? "短期动量占优" : "短期动量回落";
+    const risk = bearishCount ? `近 20 个交易日出现 ${bearishCount} 个风险信号，关注回撤持续性。` : "近期没有显著回撤信号。";
+    return `${trend}，${momentum}。${risk}`;
   }
 
   function openStockPage(code) {
-    state.leaderCode = normalizeCode(code);
+    const normalizedCode = normalizeCode(code);
+    if (normalizedCode !== normalizeCode(state.leaderCode)) state.stockSignalsExpanded = false;
+    state.leaderCode = normalizedCode;
     state.view = "stock";
     renderStockPage();
     renderViews();
@@ -1182,62 +1249,78 @@
     const candles = chart.candles || [];
     const markers = stockChartMarkers(chart);
     const latest = candles[candles.length - 1];
-    const first = candles[0];
-    const intervalReturn = latest && first && Number(first.close)
-      ? Number(latest.close) / Number(first.close) - 1
-      : NaN;
     const bullishCount = markers.filter((marker) => marker.direction === "bullish").length;
     const bearishCount = markers.filter((marker) => marker.direction === "bearish").length;
     const neutralCount = markers.length - bullishCount - bearishCount;
+    const ma5 = chartAverageValue(candles, 5);
+    const ma10 = chartAverageValue(candles, 10);
+    const ma20 = chartAverageValue(candles, 20);
     const key = aiKey("stock", code);
     container.innerHTML = `
-      <div class="stock-page-toolbar">
-        <button class="stock-back" type="button" data-stock-back><span aria-hidden="true">←</span> 返回龙头观察</button>
-        <button class="stock-page-watch${isWatched(code) ? " active" : ""}" type="button" data-stock-page-watch="${escapeHtml(code)}">${isWatched(code) ? "★ 已关注" : "☆ 加入自选"}</button>
-      </div>
       <header class="stock-page-header" style="${styleVars(leader.board_path)}">
         <div class="stock-page-identity">
-          <span>${escapeHtml(boardLabel(leader.board_path))}</span>
+          <button class="stock-back" type="button" data-stock-back><span aria-hidden="true">←</span> 龙头观察</button>
           <h2>${escapeHtml(leader.name)} <small>${escapeHtml(code)}</small></h2>
-          <p>人气 #${escapeHtml(leader.rank)} · 行情截至 ${escapeHtml(latest?.date || "--")}</p>
+          <p><span class="stock-industry">${escapeHtml(boardLabel(leader.board_path))}</span><span>人气 #${escapeHtml(leader.rank)}</span><span>行情截至 ${escapeHtml(latest?.date || "--")}</span></p>
         </div>
-        <div class="stock-page-score"><span>综合强度</span><strong>${num(leader.combined_score, 1)}</strong></div>
+        <div class="stock-header-stat"><span>最新价</span><strong class="${Number(latest?.pct) >= 0 ? "up" : "down"}">${num(latest?.close, 2)}</strong><small>${Number.isFinite(Number(latest?.pct)) ? `${Number(latest.pct) >= 0 ? "+" : ""}${num(latest.pct, 2)}%` : "--"}</small></div>
+        <div class="stock-header-stat"><span>5日</span><strong class="${Number(leader.ret_5d) >= 0 ? "up" : "down"}">${pct(leader.ret_5d)}</strong><small>短线动量</small></div>
+        <div class="stock-header-stat"><span>20日</span><strong class="${Number(leader.ret_20d) >= 0 ? "up" : "down"}">${pct(leader.ret_20d)}</strong><small>波段动量</small></div>
+        <div class="stock-header-stat"><span>量价强度</span><strong>${num(leader.qlib_factor_score, 1)}</strong><small>LumenAlpha</small></div>
+        <div class="stock-header-stat"><span>显著信号</span><strong>${markers.length}</strong><small>${bullishCount} 强 · ${bearishCount} 弱${neutralCount ? ` · ${neutralCount} 中性` : ""}</small></div>
+        <div class="stock-page-score">
+          <button class="stock-page-watch${isWatched(code) ? " active" : ""}" type="button" data-stock-page-watch="${escapeHtml(code)}">${isWatched(code) ? "★ 已关注" : "☆ 加入自选"}</button>
+          <span>综合强度</span><strong>${num(leader.combined_score, 1)}</strong>
+        </div>
       </header>
-      <div class="stock-page-stats">
-        <div><span>最新收盘</span><strong>${num(latest?.close, 2)}</strong><small>${Number.isFinite(Number(latest?.pct)) ? `${Number(latest.pct) >= 0 ? "+" : ""}${num(latest.pct, 2)}%` : "--"}</small></div>
-        <div><span>30日区间</span><strong>${signedPct(intervalReturn)}</strong><small>${candles.length} 个交易日</small></div>
-        <div><span>5日涨幅</span><strong>${pct(leader.ret_5d)}</strong><small>短线动量</small></div>
-        <div><span>20日涨幅</span><strong>${pct(leader.ret_20d)}</strong><small>波段动量</small></div>
-        <div><span>量价强度</span><strong>${num(leader.qlib_factor_score, 1)}</strong><small>LumenAlpha</small></div>
-        <div><span>显著信号</span><strong>${markers.length}</strong><small>${bullishCount} 强 · ${bearishCount} 弱${neutralCount ? ` · ${neutralCount} 中性` : ""}</small></div>
-      </div>
       <section class="stock-chart-section">
         <div class="stock-section-head">
-          <div><h3>30日全景 K 线</h3><p>最近 20 个交易日的显著信号全部标记</p></div>
-          <div class="stock-chart-legend"><span class="bullish"><i></i>强势</span><span class="bearish"><i></i>弱势</span><span class="neutral"><i></i>中性</span></div>
-        </div>
-        <div class="stock-chart-scroll">${renderKlineChart(chart, `${leader.name} 30日全景K线`, 30, { expanded: true })}</div>
-      </section>
-      <section class="stock-signal-section">
-        <div class="stock-section-head"><div><h3>完整信号明细</h3><p>按交易日归档 · 含来源与触发值</p></div><strong class="stock-signal-total">${markers.length} 项</strong></div>
-        <div class="stock-signal-timeline">${renderStockSignalTimeline(markers)}</div>
-      </section>
-      <section class="stock-detail-grid">
-        <div class="stock-score-breakdown">
-          <div class="stock-section-head"><div><h3>评分结构</h3><p>拆分当前综合强度来源</p></div></div>
-          <div class="score-bars">
-            ${scoreLine("综合", leader.combined_score, "#ef4444")}
-            ${scoreLine("量价强度", leader.qlib_factor_score, "#2f7df6")}
-            ${scoreLine("技术形态", leader.lumen_score_norm, "#d97706")}
-            ${scoreLine("板块动能", leader.sector_trend_score, "#059669")}
+          <div class="stock-chart-title"><h3>30日 K 线</h3><p>最近 20 个交易日的显著信号全部标记</p></div>
+          <div class="stock-chart-meta">
+            <div class="stock-ma-legend"><span class="ma5">MA5 <b>${num(ma5, 2)}</b></span><span class="ma10">MA10 <b>${num(ma10, 2)}</b></span><span class="ma20">MA20 <b>${num(ma20, 2)}</b></span></div>
+            <div class="stock-chart-legend"><span class="bullish"><i></i>强势</span><span class="bearish"><i></i>弱势</span><span class="neutral"><i></i>中性</span></div>
           </div>
         </div>
-        <div class="stock-page-ai">${renderAiResult(key, "个股AI分析")}</div>
+        <div class="stock-chart-scroll">${renderKlineChart(chart, `${leader.name} 30日K线`, 30, { expanded: true, hideChrome: true })}</div>
       </section>
+      <div class="stock-research-grid">
+        <section class="stock-signal-section">
+          <div class="stock-section-head"><div><h3>信号明细</h3><p>按日期分组（最新在上）</p></div><strong class="stock-signal-total">${markers.length} 项</strong></div>
+          ${renderStockSignalTable(markers)}
+        </section>
+        <aside class="stock-insight-rail">
+          <section class="stock-insight-block stock-decision">
+            <div class="stock-insight-head"><h3>当前判断</h3><span>基于 ${escapeHtml(latest?.date || "--")}</span></div>
+            <p>${escapeHtml(stockDecisionText(leader, bearishCount))}</p>
+          </section>
+          <section class="stock-insight-block">
+            <div class="stock-insight-head"><h3>强势信号</h3><strong class="bullish">${bullishCount}</strong></div>
+            <div class="stock-insight-signals">${renderSignalSummary(markers, "bullish")}</div>
+          </section>
+          <section class="stock-insight-block">
+            <div class="stock-insight-head"><h3>风险信号</h3><strong class="bearish">${bearishCount}</strong></div>
+            <div class="stock-insight-signals">${renderSignalSummary(markers, "bearish")}</div>
+          </section>
+          <section class="stock-insight-block stock-score-breakdown">
+            <div class="stock-insight-head"><h3>评分结构</h3><span>0-100</span></div>
+            <div class="score-bars">
+              ${scoreLine("综合", leader.combined_score, "#ef4444")}
+              ${scoreLine("量价强度", leader.qlib_factor_score, "#2563eb")}
+              ${scoreLine("技术形态", leader.lumen_score_norm, "#d97706")}
+              ${scoreLine("板块动能", leader.sector_trend_score, "#059669")}
+            </div>
+          </section>
+          <section class="stock-insight-block stock-page-ai">${renderAiResult(key, "AI 分析")}</section>
+        </aside>
+      </div>
     `;
     container.querySelector("[data-stock-back]")?.addEventListener("click", closeStockPage);
     container.querySelector("[data-stock-page-watch]")?.addEventListener("click", async (event) => {
       await toggleWatch(event.currentTarget.dataset.stockPageWatch);
+      renderStockPage();
+    });
+    container.querySelector("[data-expand-stock-signals]")?.addEventListener("click", () => {
+      state.stockSignalsExpanded = !state.stockSignalsExpanded;
       renderStockPage();
     });
     bindSignalStationLinks(container);
@@ -1967,6 +2050,11 @@
   }
 
   function renderViews() {
+    document.body.classList.toggle("stock-view-active", state.view === "stock");
+    const stockResearchNav = $("stockResearchNav");
+    if (stockResearchNav) stockResearchNav.hidden = !state.leaderCode;
+    const pageTitle = $("pageTitle");
+    if (pageTitle) pageTitle.textContent = state.view === "stock" ? "个股研究" : "股票板块轮动";
     document.querySelectorAll(".view").forEach((view) => {
       view.classList.toggle("active", view.id === `${state.view}View`);
     });

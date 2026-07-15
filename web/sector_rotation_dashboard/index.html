@@ -4,17 +4,19 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>LumenAlpha 股票板块轮动</title>
+    <link rel="icon" href="data:,">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="主导航">
         <div class="brand">
-          <span class="brand-mark">↗</span>
+          <span class="brand-mark">A</span>
           <span class="brand-name">LumenAlpha</span>
         </div>
         <nav class="side-nav">
           <button class="nav-item active" type="button" data-view="dashboard" data-section="overviewSection"><span class="nav-icon">⌂</span><span>今日概览</span></button>
+          <button id="stockResearchNav" class="nav-item" type="button" data-view="stock" hidden><span class="nav-icon">▱</span><span>个股研究</span></button>
           <button class="nav-item" type="button" data-view="dashboard" data-section="trendsSection"><span class="nav-icon">▥</span><span>板块行情</span></button>
           <button class="nav-item" type="button" data-view="dashboard" data-section="leadersSection"><span class="nav-icon">⌁</span><span>龙头观察</span></button>
           <button class="nav-item" type="button" data-view="analysis"><span class="nav-icon">✦</span><span>AI 日报</span></button>
@@ -32,7 +34,7 @@
       <main class="main">
         <header class="topbar">
           <div class="page-identity">
-            <h1>股票板块轮动</h1>
+            <h1 id="pageTitle">股票板块轮动</h1>
             <p id="generatedAt">数据读取中</p>
           </div>
           <div class="global-search-wrap">
