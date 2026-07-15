@@ -89,7 +89,7 @@ export async function createAuthStore(dbPath) {
   `);
   const deleteSession = db.prepare("DELETE FROM sessions WHERE token_hash = ?");
   const deleteExpiredSessions = db.prepare("DELETE FROM sessions WHERE expires_at <= ?");
-  const listWatchlist = db.prepare("SELECT code FROM watchlist WHERE user_id = ? ORDER BY created_at DESC");
+  const listWatchlist = db.prepare("SELECT code, created_at FROM watchlist WHERE user_id = ? ORDER BY created_at DESC");
   const insertWatch = db.prepare("INSERT OR IGNORE INTO watchlist (user_id, code, created_at) VALUES (?, ?, ?)");
   const deleteWatch = db.prepare("DELETE FROM watchlist WHERE user_id = ? AND code = ?");
 
@@ -140,6 +140,9 @@ export async function createAuthStore(dbPath) {
     },
     watchlist(userId) {
       return listWatchlist.all(userId).map((row) => row.code);
+    },
+    watchlistEntries(userId) {
+      return listWatchlist.all(userId).map((row) => ({ code: row.code, createdAt: row.created_at }));
     },
     addWatch(userId, code) {
       insertWatch.run(userId, code, new Date().toISOString());

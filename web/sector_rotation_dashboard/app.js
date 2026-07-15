@@ -22,6 +22,9 @@
     dailyReportLoading: false,
     aiAnalyses: {},
     watchlist: readGuestWatchlist(),
+    watchlistHydrating: false,
+    watchlistLoadingCodes: [],
+    watchlistErrors: {},
     authUser: null,
     authReady: false,
     authAvailable: false,
@@ -117,6 +120,7 @@
     renderWatchCount();
     if (!state.authUser) {
       saveGuestWatchlist();
+      delete state.watchlistErrors[normalized];
       return;
     }
     try {
@@ -125,6 +129,7 @@
         body: removing ? undefined : { code: normalized },
       });
       state.watchlist = (payload.codes || []).map(normalizeCode).filter(Boolean);
+      delete state.watchlistErrors[normalized];
       renderWatchCount();
     } catch (error) {
       state.watchlist = previous;
@@ -1662,52 +1667,196 @@
   function renderWatchCount() {
     const count = state.watchlist.length;
     if ($("watchCount")) $("watchCount").textContent = count;
-    if ($("watchlistStatus")) $("watchlistStatus").textContent = `${count} 只`;
+  }
+
+  function watchlistLeader(code) {
+    const normalized = normalizeCode(code);
+    return (data.leaders || []).find((leader) => normalizeCode(leader.code) === normalized);
+  }
+
+  function watchlistSignalStats(code) {
+    const chart = (data.stockCharts || {})[normalizeCode(code)] || { candles: [], markers: [] };
+    const markers = stockChartMarkers(chart);
+    const candles = chart.candles || [];
+    return {
+      chart,
+      markers,
+      latest: candles[candles.length - 1],
+      bullish: markers.filter((marker) => marker.direction === "bullish").length,
+      bearish: markers.filter((marker) => marker.direction === "bearish").length,
+      neutral: markers.filter((marker) => !["bullish", "bearish"].includes(marker.direction)).length,
+    };
+  }
+
+  function watchlistSignalChips(markers) {
+    const seen = new Set();
+    const recent = [...markers]
+      .sort((left, right) => String(right.date).localeCompare(String(left.date)) || Math.abs(Number(right.score || 0)) - Math.abs(Number(left.score || 0)))
+      .filter((marker) => {
+        const key = `${marker.direction}:${markerDisplayName(marker)}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
+      .slice(0, 4);
+    if (!recent.length) return `<span class="watch-signal-empty">近 20 日暂无显著信号</span>`;
+    return recent.map((marker) => `<button class="watch-signal-chip ${markerTone(marker.direction)}" type="button" data-signal-query="${escapeHtml(markerCatalogQuery(marker))}" title="查看信号含义">${escapeHtml(markerDisplayName(marker))}</button>`).join("");
+  }
+
+  function watchlistStockCard(code, index) {
+    const leader = watchlistLeader(code);
+    const error = state.watchlistErrors[code];
+    const loading = state.watchlistLoadingCodes.includes(code);
+    if (!leader) {
+      return `
+        <article class="watch-stock-card unresolved" aria-busy="${loading ? "true" : "false"}">
+          <div class="watch-stock-index">${String(index + 1).padStart(2, "0")}</div>
+          <div class="watch-stock-pending">
+            <strong>${escapeHtml(code)}</strong>
+            <p>${loading ? "正在同步最新行情与信号..." : escapeHtml(error || "暂时没有可用行情")}</p>
+          </div>
+          <div class="watch-stock-actions">
+            ${error ? `<button type="button" data-watch-retry="${escapeHtml(code)}">重试</button>` : ""}
+            <button class="watch-remove" type="button" data-watch-remove="${escapeHtml(code)}" title="取消自选" aria-label="取消自选 ${escapeHtml(code)}">★</button>
+          </div>
+        </article>
+      `;
+    }
+
+    const stats = watchlistSignalStats(code);
+    const latest = stats.latest;
+    const dailyChange = Number(latest?.pct);
+    const latestSignalDate = [...stats.markers].map((marker) => marker.date).sort().at(-1) || latest?.date || "--";
+    return `
+      <article class="watch-stock-card">
+        <header class="watch-stock-head">
+          <div class="watch-stock-index">${String(index + 1).padStart(2, "0")}</div>
+          <div class="watch-stock-identity">
+            <div><h3>${escapeHtml(leader.name)}</h3><span>${escapeHtml(code)}</span><em><i></i>信号跟踪中</em></div>
+            <p>${escapeHtml(boardLabel(leader.board_path))} · 更新至 ${escapeHtml(latest?.date || "--")}</p>
+          </div>
+          <button class="watch-remove" type="button" data-watch-remove="${escapeHtml(code)}" title="取消自选" aria-label="取消自选 ${escapeHtml(leader.name)}">★</button>
+        </header>
+        <div class="watch-stock-market">
+          <div><span>最新价</span><strong>${num(latest?.close, 2)}</strong><small class="${dailyChange >= 0 ? "up" : "down"}">${Number.isFinite(dailyChange) ? `${dailyChange >= 0 ? "+" : ""}${num(dailyChange, 2)}%` : "--"}</small></div>
+          <div><span>5日动量</span><strong class="${Number(leader.ret_5d) >= 0 ? "up" : "down"}">${pct(leader.ret_5d)}</strong></div>
+          <div><span>综合强度</span><strong>${num(leader.combined_score, 1)}</strong></div>
+          <div><span>显著信号</span><strong>${stats.markers.length}</strong><small>${stats.bullish} 强 · ${stats.bearish} 弱${stats.neutral ? ` · ${stats.neutral} 中性` : ""}</small></div>
+        </div>
+        <div class="watch-stock-signals">
+          <div class="watch-stock-signal-head"><span>最近信号</span><small>截至 ${escapeHtml(latestSignalDate)}</small></div>
+          <div class="watch-signal-chips">${watchlistSignalChips(stats.markers)}</div>
+        </div>
+        <footer class="watch-stock-footer">
+          <span class="${stats.bearish ? "has-risk" : ""}">${stats.bearish ? `${stats.bearish} 项风险信号待观察` : "暂无显著风险信号"}</span>
+          <button type="button" data-watch-open="${escapeHtml(code)}">查看完整信号 <span aria-hidden="true">→</span></button>
+        </footer>
+      </article>
+    `;
+  }
+
+  async function hydrateWatchlist(codes = state.watchlist, force = false) {
+    if (state.watchlistHydrating) return;
+    const unique = [...new Set(codes.map(normalizeCode).filter(Boolean))];
+    const targets = unique.filter((code) => force || (!watchlistLeader(code) && !state.watchlistErrors[code]));
+    if (!targets.length) return;
+    if (force) targets.forEach((code) => delete state.watchlistErrors[code]);
+    state.watchlistHydrating = true;
+    state.watchlistLoadingCodes = targets;
+    renderWatchlist();
+    try {
+      for (let index = 0; index < targets.length; index += 12) {
+        const chunk = targets.slice(index, index + 12);
+        const payload = await apiRequest("/api/stocks/analyze-batch", { method: "POST", body: { codes: chunk } });
+        const returned = new Set();
+        for (const item of payload.items || []) {
+          const code = normalizeCode(item?.leader?.code || item?.code);
+          if (!code) continue;
+          returned.add(code);
+          if (item.ok) {
+            mergeCalculatedStock(item);
+            delete state.watchlistErrors[code];
+          } else {
+            state.watchlistErrors[code] = item.error || "同步失败，请重试";
+          }
+        }
+        chunk.filter((code) => !returned.has(code)).forEach((code) => {
+          state.watchlistErrors[code] = "同步未返回该股票";
+        });
+      }
+    } catch (error) {
+      targets.forEach((code) => {
+        if (!watchlistLeader(code)) state.watchlistErrors[code] = error.message || "同步失败，请重试";
+      });
+    } finally {
+      state.watchlistHydrating = false;
+      state.watchlistLoadingCodes = [];
+      renderWatchlist();
+    }
+  }
+
+  function focusGlobalStockSearch() {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+    requestAnimationFrame(() => $("globalSearch")?.focus());
   }
 
   function renderWatchlist() {
     renderWatchCount();
     const hint = $("watchlistHint");
+    const content = $("watchlistContent");
+    const refreshButton = $("refreshWatchlistSignals");
+    if (!hint || !content) return;
     if (state.authUser) {
-      hint.textContent = `已登录为 ${state.authUser.username}，自选会自动跨设备同步`;
+      hint.textContent = `已登录为 ${state.authUser.username}，自选与信号会自动跨设备同步`;
     } else {
-      hint.innerHTML = `访客数据仅保存在当前浏览器 <button type="button" data-watchlist-login>登录同步</button>`;
+      hint.innerHTML = `访客自选保存在当前浏览器 <button type="button" data-watchlist-login>登录同步</button>`;
       hint.querySelector("[data-watchlist-login]")?.addEventListener("click", () => openAuthDialog("login"));
     }
-    const watched = state.watchlist
-      .map((code) => (data.leaders || []).find((leader) => normalizeCode(leader.code) === code))
-      .filter(Boolean);
-    if (!watched.length) {
-      $("watchlistContent").innerHTML = `<div class="watchlist-empty"><strong>还没有自选股票</strong><p>在龙头观察或个股拆解中点击星标，就会出现在这里。</p><button type="button" data-go-leaders>去看龙头</button>${state.authUser ? "" : `<button class="secondary" type="button" data-empty-login>登录账号</button>`}</div>`;
-      $("watchlistContent").querySelector("[data-go-leaders]")?.addEventListener("click", () => {
-        state.view = "dashboard";
-        state.section = "leadersSection";
-        state.mode = "overview";
-        state.activeDashboardNav = "龙头观察";
-        renderViews();
-      });
-      $("watchlistContent").querySelector("[data-empty-login]")?.addEventListener("click", () => openAuthDialog("login"));
+    if (refreshButton) {
+      refreshButton.disabled = state.watchlistHydrating || !state.watchlist.length;
+      refreshButton.classList.toggle("loading", state.watchlistHydrating);
+    }
+
+    const stats = state.watchlist.map(watchlistSignalStats);
+    const signalCount = stats.reduce((sum, item) => sum + item.markers.length, 0);
+    const strongCount = stats.reduce((sum, item) => sum + item.bullish, 0);
+    const riskStockCount = stats.filter((item) => item.bearish > 0).length;
+    const resolvedCount = state.watchlist.filter((code) => watchlistLeader(code)).length;
+    if ($("watchlistStatus")) $("watchlistStatus").textContent = `${state.watchlist.length} 只 · ${signalCount} 条信号`;
+
+    if (!state.watchlist.length) {
+      content.innerHTML = `<div class="watchlist-empty"><strong>还没有自选股票</strong><p>搜索股票并点击“加入自选”，这里会持续汇总它的最新信号。</p><button type="button" data-add-watch>搜索股票</button>${state.authUser ? "" : `<button class="secondary" type="button" data-empty-login>登录账号</button>`}</div>`;
+      content.querySelector("[data-add-watch]")?.addEventListener("click", focusGlobalStockSearch);
+      content.querySelector("[data-empty-login]")?.addEventListener("click", () => openAuthDialog("login"));
       return;
     }
-    $("watchlistContent").innerHTML = `<div class="leader-table-head"><span>#</span><span>股票</span><span>板块</span><span>综合</span><span>5日</span><span>趋势</span><span>18日K线</span><span></span></div>${watched.map(leaderCard).join("")}`;
-    $("watchlistContent").querySelectorAll(".leader-row").forEach((row) => {
-      row.addEventListener("click", (event) => {
-        if (event.target.closest(".watch-toggle")) return;
-        state.leaderCode = row.dataset.code;
-        state.view = "dashboard";
-        state.section = "leadersSection";
-        state.mode = "overview";
-        state.activeDashboardNav = "龙头观察";
-        renderDashboard();
-        renderViews();
-      });
+
+    content.innerHTML = `
+      <div class="watchlist-summary">
+        <div><span>已同步</span><strong>${resolvedCount}/${state.watchlist.length}</strong><small>股票行情</small></div>
+        <div><span>强势信号</span><strong class="up">${strongCount}</strong><small>近 20 个交易日</small></div>
+        <div><span>风险股票</span><strong class="down">${riskStockCount}</strong><small>存在弱势信号</small></div>
+        <div><span>信号总数</span><strong>${signalCount}</strong><small>点击查看计算方式</small></div>
+      </div>
+      <div class="watch-stock-grid">${state.watchlist.map(watchlistStockCard).join("")}</div>
+    `;
+    content.querySelectorAll("[data-watch-open]").forEach((button) => {
+      button.addEventListener("click", () => openStockPage(button.dataset.watchOpen));
     });
-    $("watchlistContent").querySelectorAll(".watch-toggle").forEach((button) => {
-      button.addEventListener("click", () => {
-        toggleWatch(button.dataset.watch);
+    content.querySelectorAll("[data-watch-remove]").forEach((button) => {
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        await toggleWatch(button.dataset.watchRemove);
         renderWatchlist();
       });
     });
+    content.querySelectorAll("[data-watch-retry]").forEach((button) => {
+      button.addEventListener("click", () => hydrateWatchlist([button.dataset.watchRetry], true));
+    });
+    bindSignalStationLinks(content);
+
+    const missing = state.watchlist.filter((code) => !watchlistLeader(code) && !state.watchlistErrors[code]);
+    if (missing.length && !state.watchlistHydrating) void hydrateWatchlist(missing);
   }
 
   function renderMerge() {
@@ -2244,6 +2393,9 @@
     $("mobileMore")?.addEventListener("click", () => {
       const menu = $("mobileMoreMenu");
       menu.hidden = !menu.hidden;
+    });
+    $("refreshWatchlistSignals")?.addEventListener("click", () => {
+      void hydrateWatchlist(state.watchlist, true);
     });
   }
 

@@ -189,7 +189,10 @@
           <section class="panel watchlist-panel">
             <div class="panel-head">
               <div><h2>自选关注</h2><p id="watchlistHint">登录后跨设备同步；访客数据仅保存在当前浏览器</p></div>
-              <div id="watchlistStatus" class="coverage-badge">0 只</div>
+              <div class="watchlist-head-actions">
+                <button id="refreshWatchlistSignals" class="watchlist-refresh" type="button" title="重新同步自选信号" aria-label="重新同步自选信号">&#8635;</button>
+                <div id="watchlistStatus" class="coverage-badge">0 只</div>
+              </div>
             </div>
             <div id="watchlistContent" class="watchlist-content"></div>
           </section>

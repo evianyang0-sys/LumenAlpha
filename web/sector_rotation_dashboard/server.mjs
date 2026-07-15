@@ -214,6 +214,11 @@ function authUser(req) {
   return authStore.sessionUser(sessionToken(req));
 }
 
+function watchlistPayload(userId) {
+  const items = authStore.watchlistEntries(userId);
+  return { ok: true, codes: items.map((item) => item.code), items };
+}
+
 async function handleAccountRequest(req, res) {
   const url = new URL(req.url || "/", "http://localhost");
   const path = url.pathname;
@@ -299,7 +304,7 @@ async function handleAccountRequest(req, res) {
   }
 
   if (path === "/api/watchlist" && req.method === "GET") {
-    sendJson(res, 200, { ok: true, codes: authStore.watchlist(user.id) });
+    sendJson(res, 200, watchlistPayload(user.id));
     return true;
   }
 
@@ -311,7 +316,7 @@ async function handleAccountRequest(req, res) {
       return true;
     }
     authStore.addWatch(user.id, code);
-    sendJson(res, 200, { ok: true, codes: authStore.watchlist(user.id) });
+    sendJson(res, 200, watchlistPayload(user.id));
     return true;
   }
 
@@ -322,7 +327,7 @@ async function handleAccountRequest(req, res) {
       return true;
     }
     authStore.removeWatch(user.id, code);
-    sendJson(res, 200, { ok: true, codes: authStore.watchlist(user.id) });
+    sendJson(res, 200, watchlistPayload(user.id));
     return true;
   }
 
@@ -488,6 +493,25 @@ function runStockCalculation(query) {
   });
 }
 
+async function calculateStock(query) {
+  const key = String(query).toLowerCase();
+  let calculation = stockCalculationInflight.get(key);
+  if (!calculation) {
+    if (stockCalculationInflight.size >= maxStockCalculations) {
+      const error = new Error("现场计算任务较多，请稍后重试");
+      error.code = "STOCK_CALCULATION_BUSY";
+      throw error;
+    }
+    calculation = runStockCalculation(query);
+    stockCalculationInflight.set(key, calculation);
+  }
+  try {
+    return await calculation;
+  } finally {
+    if (stockCalculationInflight.get(key) === calculation) stockCalculationInflight.delete(key);
+  }
+}
+
 async function handleStockAnalyze(req, res) {
   if (!sameOrigin(req)) {
     sendJson(res, 403, { ok: false, error: "请求来源无效" });
@@ -505,18 +529,8 @@ async function handleStockAnalyze(req, res) {
     return;
   }
 
-  const key = query.toLowerCase();
-  let calculation = stockCalculationInflight.get(key);
-  if (!calculation) {
-    if (stockCalculationInflight.size >= maxStockCalculations) {
-      sendJson(res, 503, { ok: false, error: "现场计算任务较多，请稍后重试" });
-      return;
-    }
-    calculation = runStockCalculation(query);
-    stockCalculationInflight.set(key, calculation);
-  }
   try {
-    const payload = await calculation;
+    const payload = await calculateStock(query);
     if (payload.ok) {
       sendJson(res, 200, payload);
       return;
@@ -524,10 +538,43 @@ async function handleStockAnalyze(req, res) {
     const status = payload.errorCode === "AMBIGUOUS" ? 409 : payload.errorCode === "NOT_FOUND" ? 404 : 502;
     sendJson(res, status, payload);
   } catch (error) {
-    sendJson(res, 502, { ok: false, error: error.message || "现场计算失败，请稍后重试" });
-  } finally {
-    if (stockCalculationInflight.get(key) === calculation) stockCalculationInflight.delete(key);
+    sendJson(res, error.code === "STOCK_CALCULATION_BUSY" ? 503 : 502, { ok: false, error: error.message || "现场计算失败，请稍后重试" });
   }
+}
+
+async function handleStockAnalyzeBatch(req, res) {
+  if (!sameOrigin(req)) {
+    sendJson(res, 403, { ok: false, error: "请求来源无效" });
+    return;
+  }
+  if (!consumeRateLimit(req, "stock-calculate-batch", 4, 10 * 60 * 1000)) {
+    sendJson(res, 429, { ok: false, error: "自选信号同步过于频繁，请十分钟后再试" });
+    return;
+  }
+
+  const body = await readJsonBody(req, 8192).catch(() => null);
+  const requested = Array.isArray(body?.codes) ? body.codes : [];
+  if (!requested.length || requested.length > 12) {
+    sendJson(res, 400, { ok: false, error: "每次可同步1-12只股票" });
+    return;
+  }
+  const normalized = requested.map(normalizedStockCode);
+  if (normalized.some((code) => !code)) {
+    sendJson(res, 400, { ok: false, error: "股票代码无效" });
+    return;
+  }
+
+  const codes = [...new Set(normalized)];
+  const items = [];
+  for (const code of codes) {
+    try {
+      const payload = await calculateStock(code);
+      items.push(payload.ok ? payload : { ok: false, code, error: payload.error || "计算失败" });
+    } catch (error) {
+      items.push({ ok: false, code, error: error.message || "计算失败" });
+    }
+  }
+  sendJson(res, 200, { ok: true, items });
 }
 
 function mockAnalysis(type, context) {
@@ -653,6 +700,11 @@ const server = createServer(async (req, res) => {
 
   if (req.url === "/api/stocks/analyze" && req.method === "POST") {
     await handleStockAnalyze(req, res);
+    return;
+  }
+
+  if (req.url === "/api/stocks/analyze-batch" && req.method === "POST") {
+    await handleStockAnalyzeBatch(req, res);
     return;
   }
 

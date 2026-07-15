@@ -38,7 +38,8 @@ test("register rejects duplicate usernames with a driver error the server can cl
 
 test("account sessions and watchlist persist in SQLite", async () => {
   const directory = await mkdtemp(join(tmpdir(), "lumenalpha-auth-"));
-  const store = await createAuthStore(join(directory, "users.sqlite"));
+  const dbPath = join(directory, "users.sqlite");
+  let store = await createAuthStore(dbPath);
 
   try {
     assert.equal(validateUsername("ab").ok, false);
@@ -57,8 +58,17 @@ test("account sessions and watchlist persist in SQLite", async () => {
     store.addWatch(loggedIn.user.id, "600519");
     store.addWatch(loggedIn.user.id, "000001");
     assert.deepEqual(store.watchlist(loggedIn.user.id).sort(), ["000001", "600519"]);
+    assert.deepEqual(
+      store.watchlistEntries(loggedIn.user.id).map((item) => item.code).sort(),
+      ["000001", "600519"],
+    );
+    assert.match(store.watchlistEntries(loggedIn.user.id)[0].createdAt, /^\d{4}-\d{2}-\d{2}T/);
 
     store.removeWatch(loggedIn.user.id, "000001");
+    assert.deepEqual(store.watchlist(loggedIn.user.id), ["600519"]);
+
+    store.close();
+    store = await createAuthStore(dbPath);
     assert.deepEqual(store.watchlist(loggedIn.user.id), ["600519"]);
 
     store.logout(loggedIn.token);
