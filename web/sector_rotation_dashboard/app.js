@@ -1261,7 +1261,7 @@
         <div class="stock-page-identity">
           <button class="stock-back" type="button" data-stock-back><span aria-hidden="true">←</span> 龙头观察</button>
           <h2>${escapeHtml(leader.name)} <small>${escapeHtml(code)}</small></h2>
-          <p><span class="stock-industry">${escapeHtml(boardLabel(leader.board_path))}</span><span>人气 #${escapeHtml(leader.rank)}</span><span>行情截至 ${escapeHtml(latest?.date || "--")}</span></p>
+          <p><span class="stock-industry">${escapeHtml(boardLabel(leader.board_path))}</span><span>人气 #${escapeHtml(leader.rank)}</span><span>行情截至 ${escapeHtml(latest?.date || "--")}</span>${leader.on_demand ? `<span class="stock-live-badge">现场计算</span>` : ""}</p>
         </div>
         <div class="stock-header-stat"><span>最新价</span><strong class="${Number(latest?.pct) >= 0 ? "up" : "down"}">${num(latest?.close, 2)}</strong><small>${Number.isFinite(Number(latest?.pct)) ? `${Number(latest.pct) >= 0 ? "+" : ""}${num(latest.pct, 2)}%` : "--"}</small></div>
         <div class="stock-header-stat"><span>5日</span><strong class="${Number(leader.ret_5d) >= 0 ? "up" : "down"}">${pct(leader.ret_5d)}</strong><small>短线动量</small></div>
@@ -1292,6 +1292,7 @@
           <section class="stock-insight-block stock-decision">
             <div class="stock-insight-head"><h3>当前判断</h3><span>基于 ${escapeHtml(latest?.date || "--")}</span></div>
             <p>${escapeHtml(stockDecisionText(leader, bearishCount))}</p>
+            ${leader.calculation_note ? `<small class="stock-calculation-note">${escapeHtml(leader.calculation_note)}</small>` : ""}
           </section>
           <section class="stock-insight-block">
             <div class="stock-insight-head"><h3>强势信号</h3><strong class="bullish">${bullishCount}</strong></div>
@@ -2141,6 +2142,60 @@
     });
   }
 
+  function mergeCalculatedStock(payload) {
+    const leader = payload?.leader;
+    const code = normalizeCode(leader?.code);
+    if (!leader || !code) throw new Error("现场计算返回的数据不完整");
+    data.leaders = [leader, ...(data.leaders || []).filter((item) => normalizeCode(item.code) !== code)]
+      .sort((left, right) => Number(right.combined_score || 0) - Number(left.combined_score || 0));
+    data.stockCharts = { ...(data.stockCharts || {}), [code]: payload.chart || { candles: [], markers: [] } };
+    data.signals = [
+      ...(payload.signals || []),
+      ...(data.signals || []).filter((item) => normalizeCode(item.code) !== code),
+    ];
+    return code;
+  }
+
+  function bindLiveStockActions(input, results) {
+    results.querySelectorAll("[data-live-stock-query]").forEach((button) => {
+      button.addEventListener("click", () => calculateLiveStock(button.dataset.liveStockQuery, input, results, button));
+    });
+  }
+
+  async function calculateLiveStock(query, input, results, button) {
+    if (!query || button.disabled) return;
+    button.disabled = true;
+    button.classList.add("loading");
+    const status = button.querySelector("b");
+    if (status) status.textContent = "计算中...";
+    try {
+      const response = await fetch("/api/stocks/analyze", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (Array.isArray(payload.candidates) && payload.candidates.length) {
+        results.innerHTML = `
+          <div class="live-search-message">匹配到多只股票，请选择具体代码</div>
+          ${payload.candidates.map((candidate) => `<button class="live-search-candidate" type="button" data-live-stock-query="${escapeHtml(candidate.code)}"><span><strong>${escapeHtml(candidate.name)}</strong><small>${escapeHtml(normalizeCode(candidate.code))}</small></span><b>计算</b></button>`).join("")}
+        `;
+        bindLiveStockActions(input, results);
+        return;
+      }
+      if (!response.ok || payload.ok === false) throw new Error(payload.error || `HTTP ${response.status}`);
+      const code = mergeCalculatedStock(payload);
+      input.value = "";
+      results.hidden = true;
+      results.innerHTML = "";
+      openStockPage(code);
+    } catch (error) {
+      results.hidden = false;
+      results.innerHTML = `<div class="live-search-error"><strong>暂时无法计算</strong><small>${escapeHtml(error.message || "请稍后重试")}</small></div>`;
+    }
+  }
+
   function bindGlobalSearch() {
     const input = $("globalSearch");
     const results = $("globalSearchResults");
@@ -2155,7 +2210,12 @@
       }
       const matches = (data.leaders || []).filter((leader) => [leader.name, leader.code, leader.board_path].join(" ").toLowerCase().includes(keyword)).slice(0, 8);
       results.hidden = false;
-      results.innerHTML = matches.length ? matches.map((leader) => `<button type="button" data-search-code="${escapeHtml(leader.code)}"><span><strong>${escapeHtml(leader.name)}</strong><small>${escapeHtml(normalizeCode(leader.code))} · ${escapeHtml(boardLabel(leader.board_path))}</small></span><b>${num(leader.combined_score, 1)}</b></button>`).join("") : `<div class="search-empty">没有找到匹配股票</div>`;
+      const canCalculate = keyword.length >= 2 || /^\d{6}$/.test(keyword);
+      results.innerHTML = matches.length
+        ? matches.map((leader) => `<button type="button" data-search-code="${escapeHtml(leader.code)}"><span><strong>${escapeHtml(leader.name)}</strong><small>${escapeHtml(normalizeCode(leader.code))} · ${escapeHtml(boardLabel(leader.board_path))}</small></span><b>${num(leader.combined_score, 1)}</b></button>`).join("")
+        : canCalculate
+          ? `<button class="live-search-action" type="button" data-live-stock-query="${escapeHtml(input.value.trim())}"><span><strong>现场计算“${escapeHtml(input.value.trim())}”</strong><small>拉取最新日线，并按当前参考样本评分</small></span><b>开始计算</b></button>`
+          : `<div class="search-empty">请输入完整股票名称或6位代码</div>`;
       results.querySelectorAll("[data-search-code]").forEach((button) => {
         button.addEventListener("click", () => {
           state.leaderCode = button.dataset.searchCode;
@@ -2169,6 +2229,7 @@
           renderViews();
         });
       });
+      bindLiveStockActions(input, results);
     });
     document.addEventListener("click", (event) => {
       if (!event.target.closest(".global-search-wrap")) results.hidden = true;

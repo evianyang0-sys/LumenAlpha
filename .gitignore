@@ -25,6 +25,7 @@ yarn-error.log*
 data/sector_rotation/cache/
 data/sector_rotation/daily_runs/
 data/sector_rotation/ai_analysis/
+data/sector_rotation/on_demand/
 data/*.sqlite
 data/*.sqlite-shm
 data/*.sqlite-wal

@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { createReadStream, existsSync, readFileSync, statSync, watch } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
+import { spawn } from "node:child_process";
 import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAuthStore, isUniqueConstraintError, validatePassword, validateUsername } from "./auth_store.mjs";
@@ -50,6 +51,18 @@ const userDbPath = configuredUserDbPath.startsWith("/") ? configuredUserDbPath :
 const authStore = await createAuthStore(userDbPath);
 const sessionCookieName = "lumenalpha_session";
 const authRateLimits = new Map();
+const configuredPython = resolve(repoRoot, ".venv/bin/python");
+const pythonBin = process.env.PYTHON_BIN || (existsSync(configuredPython) ? configuredPython : "python3");
+const stockCalculationScript = resolve(repoRoot, "scripts/on_demand_stock.py");
+const requestedLiveStockCacheSeconds = Number(process.env.LIVE_STOCK_CACHE_SECONDS || 1800);
+const liveStockCacheSeconds = Number.isFinite(requestedLiveStockCacheSeconds)
+  ? Math.round(Math.max(0, Math.min(86400, requestedLiveStockCacheSeconds)))
+  : 1800;
+const requestedMaxStockCalculations = Number(process.env.MAX_LIVE_STOCK_PROCESSES || 2);
+const maxStockCalculations = Number.isFinite(requestedMaxStockCalculations)
+  ? Math.round(Math.max(1, Math.min(4, requestedMaxStockCalculations)))
+  : 2;
+const stockCalculationInflight = new Map();
 
 const mime = {
   ".html": "text/html; charset=utf-8",
@@ -420,6 +433,103 @@ function tryParseJson(text) {
   }
 }
 
+function runStockCalculation(query) {
+  return new Promise((resolveCalculation, rejectCalculation) => {
+    const child = spawn(
+      pythonBin,
+      [stockCalculationScript, "--query", query, "--max-age", String(liveStockCacheSeconds)],
+      { cwd: repoRoot, env: { ...process.env, PYTHONUNBUFFERED: "1" }, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const outputLimit = 2_000_000;
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    let outputExceeded = false;
+
+    child.stdout.setEncoding("utf8");
+    child.stderr.setEncoding("utf8");
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk;
+      if (Buffer.byteLength(stdout) > outputLimit) {
+        outputExceeded = true;
+        child.kill("SIGKILL");
+      }
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr = `${stderr}${chunk}`.slice(-8000);
+    });
+
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, 75_000);
+
+    child.once("error", (error) => {
+      clearTimeout(timeout);
+      rejectCalculation(error);
+    });
+    child.once("close", () => {
+      clearTimeout(timeout);
+      if (timedOut) {
+        rejectCalculation(new Error("现场计算超时，请稍后重试"));
+        return;
+      }
+      if (outputExceeded) {
+        rejectCalculation(new Error("现场计算输出异常"));
+        return;
+      }
+      const payload = tryParseJson(stdout);
+      if (payload && typeof payload === "object") {
+        resolveCalculation(payload);
+        return;
+      }
+      rejectCalculation(new Error(stderr.trim() || "现场计算没有返回有效结果"));
+    });
+  });
+}
+
+async function handleStockAnalyze(req, res) {
+  if (!sameOrigin(req)) {
+    sendJson(res, 403, { ok: false, error: "请求来源无效" });
+    return;
+  }
+  if (!consumeRateLimit(req, "stock-calculate", 12, 10 * 60 * 1000)) {
+    sendJson(res, 429, { ok: false, error: "现场计算过于频繁，请十分钟后再试" });
+    return;
+  }
+
+  const body = await readJsonBody(req, 4096).catch(() => null);
+  const query = String(body?.query || "").trim();
+  if (!query || query.length > 20 || (query.length < 2 && !/^\d{6}$/.test(query))) {
+    sendJson(res, 400, { ok: false, error: "请输入完整股票名称或6位代码" });
+    return;
+  }
+
+  const key = query.toLowerCase();
+  let calculation = stockCalculationInflight.get(key);
+  if (!calculation) {
+    if (stockCalculationInflight.size >= maxStockCalculations) {
+      sendJson(res, 503, { ok: false, error: "现场计算任务较多，请稍后重试" });
+      return;
+    }
+    calculation = runStockCalculation(query);
+    stockCalculationInflight.set(key, calculation);
+  }
+  try {
+    const payload = await calculation;
+    if (payload.ok) {
+      sendJson(res, 200, payload);
+      return;
+    }
+    const status = payload.errorCode === "AMBIGUOUS" ? 409 : payload.errorCode === "NOT_FOUND" ? 404 : 502;
+    sendJson(res, status, payload);
+  } catch (error) {
+    sendJson(res, 502, { ok: false, error: error.message || "现场计算失败，请稍后重试" });
+  } finally {
+    if (stockCalculationInflight.get(key) === calculation) stockCalculationInflight.delete(key);
+  }
+}
+
 function mockAnalysis(type, context) {
   const subject = context?.stock?.name || context?.board?.board_path || "当前日报";
   return normalizeAnalysis({
@@ -538,6 +648,11 @@ const server = createServer(async (req, res) => {
 
   if (req.url === "/api/ai/analyze" && req.method === "POST") {
     await handleAiAnalyze(req, res);
+    return;
+  }
+
+  if (req.url === "/api/stocks/analyze" && req.method === "POST") {
+    await handleStockAnalyze(req, res);
     return;
   }
 

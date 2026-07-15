@@ -307,6 +307,57 @@ body.sidebar-collapsed .brand {
   color: var(--red);
 }
 
+.global-search-results .live-search-action {
+  background: #f4f8ff;
+}
+
+.global-search-results .live-search-action:hover,
+.global-search-results .live-search-candidate:hover {
+  background: #edf4ff;
+}
+
+.global-search-results .live-search-action b,
+.global-search-results .live-search-candidate b {
+  flex: 0 0 auto;
+  color: var(--blue);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.global-search-results button.loading {
+  cursor: wait;
+  opacity: 0.68;
+}
+
+.live-search-message {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  background: #f8fafc;
+  font-size: 11px;
+}
+
+.live-search-error {
+  padding: 13px 14px;
+}
+
+.live-search-error strong,
+.live-search-error small {
+  display: block;
+}
+
+.live-search-error strong {
+  color: #b42318;
+  font-size: 12px;
+}
+
+.live-search-error small {
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .search-empty {
   padding: 16px;
   color: var(--muted);
@@ -1381,6 +1432,15 @@ body.stock-view-active .mode-switch {
   font-weight: 720;
 }
 
+.stock-live-badge {
+  border: 1px solid #b9d2ff;
+  border-radius: 3px;
+  padding: 1px 5px;
+  color: #175cd3;
+  background: #eff5ff;
+  font-weight: 700;
+}
+
 .stock-header-stat,
 .stock-page-score {
   min-width: 0;
@@ -1702,6 +1762,17 @@ body.stock-view-active .mode-switch {
   font-size: 12px;
   font-weight: 620;
   line-height: 1.65;
+}
+
+.stock-calculation-note {
+  display: block;
+  margin-top: 9px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.55;
 }
 
 .stock-insight-signals {
