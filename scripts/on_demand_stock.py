@@ -40,7 +40,7 @@ REFERENCE_PATH = ROOT / "data/sector_rotation/leader_cards_latest.csv"
 SECTOR_PATH = ROOT / "data/sector_rotation/sector_summary_latest.csv"
 HISTORY_CACHE = ROOT / "data/sector_rotation/cache"
 RESULT_CACHE = ROOT / "data/sector_rotation/on_demand"
-CACHE_VERSION = 2
+CACHE_VERSION = 3
 RAW_FEATURES = ["ret_5d", "ret_20d", "ma20_bias", "volume_ratio_20", "volatility_20"]
 CLASSIFICATION_FIELDS = [
     "industry_boards",
@@ -294,12 +294,12 @@ def calculate_stock(
     }
     reference_count = int(len(reference))
     note_parts = [f"量价评分相对当前{reference_count}只参考样本计算"]
-    note_parts.append("人气与板块使用最近系统快照")
+    note_parts.append("人气与板块优先使用最近系统快照")
     if stock.get("classification_fallback"):
         note_parts.append("行业分类沿用最近一次有效快照")
     missing = [label for key, label in [("lumen", "技术形态"), ("popularity", "人气"), ("sector", "板块")] if not components[key]]
     if missing:
-        note_parts.append(f"{','.join(missing)}数据不足，按中性值处理")
+        note_parts.append(f"{'、'.join(missing)}数据不足，按中性值处理")
     quality = {
         "historySource": str(history_status or "unknown").split(":", 1)[0],
         "historyRows": int(len(history)),
