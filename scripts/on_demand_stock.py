@@ -40,7 +40,26 @@ REFERENCE_PATH = ROOT / "data/sector_rotation/leader_cards_latest.csv"
 SECTOR_PATH = ROOT / "data/sector_rotation/sector_summary_latest.csv"
 HISTORY_CACHE = ROOT / "data/sector_rotation/cache"
 RESULT_CACHE = ROOT / "data/sector_rotation/on_demand"
+CACHE_VERSION = 2
 RAW_FEATURES = ["ret_5d", "ret_20d", "ma20_bias", "volume_ratio_20", "volatility_20"]
+CLASSIFICATION_FIELDS = [
+    "industry_boards",
+    "primary_industry",
+    "exchange_industry",
+    "concept_boards",
+    "primary_concept",
+    "concept_count",
+    "is_tech",
+    "board_l1",
+    "board_l2",
+    "board_l3",
+    "board_path",
+    "all_tech_l2",
+    "all_tech_l3",
+    "tech_source_boards",
+    "classification_reason",
+    "classified_at",
+]
 
 
 class StockLookupError(ValueError):
@@ -89,7 +108,34 @@ def candidate_rows(frame: pd.DataFrame) -> list[dict[str, str]]:
     return [{"code": str(row["code"]), "name": str(row.get("name") or "")} for _, row in rows.iterrows()]
 
 
-def resolve_stock(query: str, ranks_path: Path = RANKS_PATH, detail_path: Path = DETAIL_PATH) -> dict[str, Any]:
+def historical_classification(code: str, paths: list[Path]) -> dict[str, Any]:
+    for path in paths:
+        try:
+            frame = read_csv(path)
+        except (OSError, RuntimeError, pd.errors.ParserError):
+            continue
+        if "code" not in frame:
+            continue
+        matched = frame[frame["code"] == code]
+        if matched.empty:
+            continue
+        row = matched.iloc[0].dropna()
+        if str(row.get("board_path") or "").strip() in {"", "未分类"}:
+            continue
+        classification = {field: row[field] for field in CLASSIFICATION_FIELDS if field in row}
+        if classification:
+            classification["classification_fallback"] = True
+            classification["classification_snapshot_at"] = str(row.get("classified_at") or path.stem)
+            return classification
+    return {}
+
+
+def resolve_stock(
+    query: str,
+    ranks_path: Path = RANKS_PATH,
+    detail_path: Path = DETAIL_PATH,
+    detail_history_paths: list[Path] | None = None,
+) -> dict[str, Any]:
     keyword = str(query or "").strip()
     if not keyword or len(keyword) > 20:
         raise StockLookupError("请输入完整股票名称或6位代码")
@@ -113,6 +159,15 @@ def resolve_stock(query: str, ranks_path: Path = RANKS_PATH, detail_path: Path =
     classified = detail[detail["code"] == stock["code"]]
     if not classified.empty:
         stock.update(classified.iloc[0].dropna().to_dict())
+    else:
+        history_paths = detail_history_paths
+        if history_paths is None and detail_path.resolve() == DETAIL_PATH.resolve():
+            history_paths = sorted(
+                (path for path in detail_path.parent.glob("a_share_hot_rank_top2000_tech_reclassified_20*.csv") if path != detail_path),
+                key=lambda path: path.stat().st_mtime,
+                reverse=True,
+            )[:30]
+        stock.update(historical_classification(stock["code"], history_paths or []))
     stock.setdefault("board_l1", "")
     stock.setdefault("board_l2", "")
     stock.setdefault("board_l3", "未分类")
@@ -166,9 +221,12 @@ def lumen_percentile(value: Any, reference: pd.DataFrame, code: str = "") -> flo
 
 
 def sector_snapshot(stock: dict[str, Any], sectors: pd.DataFrame) -> tuple[dict[str, Any], bool]:
+    board_path = str(stock.get("board_path") or "").strip()
+    if board_path in {"", "未分类"}:
+        return {"sector_ret_5d": None, "sector_ret_20d": None, "sector_trend_score": 50.0}, False
     if "board_path" not in sectors:
         return {"sector_ret_5d": None, "sector_ret_20d": None, "sector_trend_score": 50.0}, False
-    matched = sectors[sectors["board_path"].fillna("").astype(str) == str(stock.get("board_path") or "")]
+    matched = sectors[sectors["board_path"].fillna("").astype(str) == board_path]
     if matched.empty:
         return {"sector_ret_5d": None, "sector_ret_20d": None, "sector_trend_score": 50.0}, False
     row = matched.iloc[0]
@@ -237,6 +295,8 @@ def calculate_stock(
     reference_count = int(len(reference))
     note_parts = [f"量价评分相对当前{reference_count}只参考样本计算"]
     note_parts.append("人气与板块使用最近系统快照")
+    if stock.get("classification_fallback"):
+        note_parts.append("行业分类沿用最近一次有效快照")
     missing = [label for key, label in [("lumen", "技术形态"), ("popularity", "人气"), ("sector", "板块")] if not components[key]]
     if missing:
         note_parts.append(f"{','.join(missing)}数据不足，按中性值处理")
@@ -267,6 +327,7 @@ def calculate_stock(
     return clean_json(
         {
             "ok": True,
+            "cacheVersion": CACHE_VERSION,
             "cached": False,
             "generatedAt": datetime.now().isoformat(timespec="seconds"),
             "latestDate": latest_date,
@@ -285,8 +346,9 @@ def calculate_query(query: str, max_age_seconds: int) -> dict[str, Any]:
     result_path = RESULT_CACHE / f"{code}.json"
     if result_path.exists() and time.time() - result_path.stat().st_mtime <= max(0, max_age_seconds):
         cached = json.loads(result_path.read_text(encoding="utf-8"))
-        cached["cached"] = True
-        return cached
+        if cached.get("cacheVersion") == CACHE_VERSION:
+            cached["cached"] = True
+            return cached
 
     HISTORY_CACHE.mkdir(parents=True, exist_ok=True)
     end_date = datetime.now().strftime("%Y%m%d")

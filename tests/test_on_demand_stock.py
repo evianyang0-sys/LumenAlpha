@@ -14,6 +14,7 @@ from scripts.on_demand_stock import (
     lumen_percentile,
     rank_price_feature,
     resolve_stock,
+    sector_snapshot,
 )
 
 
@@ -66,6 +67,43 @@ class OnDemandStockTest(unittest.TestCase):
                 resolve_stock("测试科技", ranks, detail)
 
             self.assertEqual(2, len(context.exception.candidates))
+
+    def test_resolve_stock_can_reuse_only_historical_classification(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            ranks = root / "ranks.csv"
+            detail = root / "detail.csv"
+            historical = root / "historical.csv"
+            pd.DataFrame([{"code": "601138", "name": "工业富联", "rank_status": "forbidden"}]).to_csv(ranks, index=False)
+            pd.DataFrame(columns=["code", "name"]).to_csv(detail, index=False)
+            pd.DataFrame(
+                [
+                    {
+                        "code": "601138",
+                        "name": "工业富联",
+                        "rank": 38,
+                        "board_l1": "科技",
+                        "board_l2": "AI算力与数据中心",
+                        "board_l3": "算力服务器",
+                        "board_path": "科技>AI算力与数据中心>算力服务器",
+                        "classified_at": "2026-07-11T18:23:53",
+                    }
+                ]
+            ).to_csv(historical, index=False)
+
+            stock = resolve_stock("工业富联", ranks, detail, [historical])
+
+            self.assertIsNone(stock["rank"])
+            self.assertEqual("算力服务器", stock["board_l3"])
+            self.assertTrue(stock["classification_fallback"])
+
+    def test_unclassified_stock_does_not_use_unclassified_sector_score(self):
+        sectors = pd.DataFrame([{"board_path": "未分类", "sector_trend_score": 99.0}])
+
+        snapshot, valid = sector_snapshot({"board_path": "未分类"}, sectors)
+
+        self.assertFalse(valid)
+        self.assertEqual(50.0, snapshot["sector_trend_score"])
 
     def test_rank_price_feature_uses_reference_universe(self):
         raw = {

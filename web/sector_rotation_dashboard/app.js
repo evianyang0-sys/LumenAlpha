@@ -1249,6 +1249,7 @@
     const candles = chart.candles || [];
     const markers = stockChartMarkers(chart);
     const latest = candles[candles.length - 1];
+    const popularityLabel = leader.rank !== null && leader.rank !== undefined && leader.rank !== "" ? `人气 #${leader.rank}` : "人气暂无";
     const bullishCount = markers.filter((marker) => marker.direction === "bullish").length;
     const bearishCount = markers.filter((marker) => marker.direction === "bearish").length;
     const neutralCount = markers.length - bullishCount - bearishCount;
@@ -1261,7 +1262,7 @@
         <div class="stock-page-identity">
           <button class="stock-back" type="button" data-stock-back><span aria-hidden="true">←</span> 龙头观察</button>
           <h2>${escapeHtml(leader.name)} <small>${escapeHtml(code)}</small></h2>
-          <p><span class="stock-industry">${escapeHtml(boardLabel(leader.board_path))}</span><span>人气 #${escapeHtml(leader.rank)}</span><span>行情截至 ${escapeHtml(latest?.date || "--")}</span>${leader.on_demand ? `<span class="stock-live-badge">现场计算</span>` : ""}</p>
+          <p><span class="stock-industry">${escapeHtml(boardLabel(leader.board_path))}</span><span>${escapeHtml(popularityLabel)}</span><span>行情截至 ${escapeHtml(latest?.date || "--")}</span>${leader.on_demand ? `<span class="stock-live-badge">现场计算</span>` : ""}</p>
         </div>
         <div class="stock-header-stat"><span>最新价</span><strong class="${Number(latest?.pct) >= 0 ? "up" : "down"}">${num(latest?.close, 2)}</strong><small>${Number.isFinite(Number(latest?.pct)) ? `${Number(latest.pct) >= 0 ? "+" : ""}${num(latest.pct, 2)}%` : "--"}</small></div>
         <div class="stock-header-stat"><span>5日</span><strong class="${Number(leader.ret_5d) >= 0 ? "up" : "down"}">${pct(leader.ret_5d)}</strong><small>短线动量</small></div>
